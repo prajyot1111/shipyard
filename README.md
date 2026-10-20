@@ -9,6 +9,10 @@ no account besides your own Claude sign-in.
 
 ## What you get
 
+
+https://github.com/user-attachments/assets/a8c28163-4cf2-4ce2-9378-a3f210dd6881
+
+
 - **A board.** Every piece of work is a card with a stage. What waits on you is always one
   list.
 - **Two gates, both yours.** A plan you can read and answer before anything is built (when
