@@ -1,0 +1,96 @@
+# What the voice gateway needs from outside the standard library.
+#
+# INSTALLED INTO ~/keel/.venv-voice, its own interpreter, and the separation is the
+# point. `keel/` is Python 3.14 and the standard library with no pip dependencies, and
+# the segments' fetchers run under the venv beside the segments tree, one of which parses
+# his bills. A forty-package machine-learning tree arriving in either of those so
+# that the assistant can talk would be the opposite of deliberate. Delete .venv-voice and
+# the speech stack is gone and nothing else is touched.
+#
+# Build it with: keel voice venv
+#
+# EVERYTHING ELSE IN THIS PACKAGE IS STDLIB. The router is loopback HTTP to ollama, the
+# websocket is a hundred lines of RFC 6455, the bus is JSON on disk. This file exists for
+# the speech model and for nothing else, which is why the gateway starts and serves
+# without it and reports the model as missing on /voice/health.
+#
+# TWO MACHINES, ONE FILE (c-284, c-286). The Mac's speech stack is Apple-silicon builds
+# (MLX, and kokoro on torch over brew's espeak-ng); the Linux box runs the same model
+# families through ONNX. The markers below pick each side's half, so `keel voice venv` is
+# the one command on both and this stays the one list.
+parakeet-mlx==0.5.2; sys_platform == "darwin"
+
+# THE VOICE. Live since 2026-09-03, and it was NOT in this file until now, which was the
+# real bug: the venv had kokoro in it because it was installed by hand, and this file is
+# what a rebuild reads, so a rebuild would have produced a venv
+# with no kokoro in it and the chain would have fallen quietly through to `say`. The
+# thing that is running has to be the thing that is written down.
+#
+# PINNED, unlike parakeet-mlx's tree below, because this one pins the INTERPRETER:
+# kokoro 0.9.4 is `Requires-Python >=3.10,<3.13`, which is the whole reason
+# `keel voice venv` searches for a versioned python3.12 rather than whatever
+# `python3` points at. Moving this pin can move that ceiling, so it is a deliberate act.
+#
+# It also needs a system espeak-ng, which is NOT a python package and cannot be listed
+# here. It is installed on this machine (1.52.0, via brew) and `keel voice venv` cannot
+# install it, so a fresh machine needs: brew install espeak-ng
+kokoro==0.9.4; sys_platform == "darwin"
+
+# THE END-OF-UTTERANCE DETECTOR, ON BOTH MACHINES (his answer, Q4 at c-277's plan gate).
+# sherpa-onnx already runs the box's speech; it also publishes macOS wheels, and the
+# Silero VAD that voice/harbor_voice/vad.py wants is inside the package rather than beside
+# it. One line here is what makes `auto` find a detector on either machine, so there is
+# one code path rather than a Mac branch.
+#
+# LANDED UNVERIFIED ON THE MAC, and said plainly rather than implied: this was built on
+# the box and a macOS wheel cannot be resolved from Linux, so whether this fights
+# parakeet-mlx's tree is answered at the Mac's next `keel voice venv` and not before. If
+# it does fight, this line comes out: `vad.make_vad` already degrades to a detector that
+# never fires, so the Mac keeps today's twenty second backstop and nothing else changes.
+# The box has the detector either way, measured.
+sherpa-onnx==1.13.8; sys_platform == "darwin"
+
+# THE BOX'S HALF (<install>/history/docs/vps-plan.md, V3; voice/harbor_voice/onnx.py). From prebuilt aarch64
+# wheels with no compiler and no apt package: sherpa-onnx runs Parakeet TDT CTC 110M int8
+# (0.067 s for a 2 s utterance on two cores), kokoro-onnx is the TTS fallback beneath
+# Google and brings its own espeak-ng (espeakng-loader), and soundfile reads audio files
+# (the voice venv's check imports it). numpy is named because onnx.py imports it
+# directly, not merely through these. Pinned to the versions run in a Linux arm64
+# container on 2026-09-19 (c-286); kokoro-onnx 0.6.1 is `Requires-Python >=3.10,<3.14`,
+# inside MAX_PY. The models are files, not packages, in ~/voice-bench/models
+# (HARBOR_VOICE_MODELS), checked by sha256.
+sherpa-onnx==1.13.8; sys_platform == "linux"
+kokoro-onnx==0.6.1; sys_platform == "linux"
+soundfile==0.14.0; sys_platform == "linux"
+numpy; sys_platform == "linux"
+
+# NOT PINNED HERE, DELIBERATELY: parakeet-mlx's own tree. It pulls mlx, numpy, librosa,
+# numba and about forty more, and nothing downstream of this one parses money. What a background upgrade can change here is transcription accuracy,
+# which the STT probe measures directly, rather than a number on a bill.
+#
+# NOT HERE AND ON PURPOSE. Kokoro used to be in this list, with a note saying blis
+# would not build and espeak-ng was missing. Both were fixed by hand on 2026-09-03
+# and the note outlived the problem, which is how a comment becomes a lie.
+#
+#   anything     there is no paid API path anywhere in this package. Findings 11 to 15
+#   for a        rejected hosted routing on custody grounds and the local model met the
+#   vendor       budget, so the code cannot reach a vendor at all.
+
+# THE FILLER'S PICKER. Static embeddings, no torch, tens of megabytes: it is a lookup
+# table rather than a network, which is why it does not reopen the resident-cost question
+# that switching the router off closed. `minishlab/potion-base-8M` is DELIBERATELY the
+# same model csr's thread search uses, so this machine holds one static embedding model
+# rather than two.
+#
+# NOT IMPORTED FROM csr. ~/.claude/tools/smart-resume is a different tool with its own
+# lifecycle, and reaching into it would make voice break when it moves. This depends on
+# the package and on the model NAME, and keeps its own vectors.
+#
+# NOT PINNED, for the same reason parakeet's tree is not: what a background upgrade can
+# change here is which of six filler topics a question lands in, and the wrong one is a
+# slightly less apt "hold on", not a wrong answer. bin/keel-voice-corpus score measures
+# it directly against a held-out set.
+#
+# ITS ABSENCE IS NOT A FAILURE. corpus.picker_from_config falls back to the keyword
+# mapping, which needs nothing, and /voice/health says which one answered.
+model2vec

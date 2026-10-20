@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""Seed the demo sandbox's board for the video's still scenes, one phase of the day at a time.
+
+    demo/sandbox/run demo/seed history | morning | export [<card>] | breaks | evening | all
+
+`demo/seeding/day.py` says what each phase files. It runs only under `demo/sandbox/run`,
+which names the sandbox's toml and refuses any board that is not the sandbox's.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from seeding import run  # noqa: E402
+
+sys.exit(run.main(sys.argv[1:]))

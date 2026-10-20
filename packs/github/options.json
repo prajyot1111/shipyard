@@ -1,0 +1,7 @@
+[
+  {"key": "repo", "label": "Repo", "type": "multiselect", "stored": "card", "options": [], "default": [], "help": "one or more of the space's repos; the first is the primary worktree"},
+  {"key": "autonomy", "label": "Autonomy", "type": "select", "stored": "card", "options": ["attended", "autonomous"], "default": "attended"},
+  {"key": "kind", "label": "Kind", "type": "select", "stored": "options", "options": ["change", "research"], "default": "change", "help": "a change ends in a pull request; research ends in its record and opens none"},
+  {"key": "model", "label": "Model", "type": "select", "stored": "card", "options": ["opus", "sonnet", "haiku"], "default": "opus"},
+  {"key": "base", "label": "Base branch", "type": "text", "stored": "options", "placeholder": "the repo's default branch", "help": "the branch the pull request merges into; empty is the repo's default branch"}
+]

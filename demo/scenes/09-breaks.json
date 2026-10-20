@@ -1,0 +1,62 @@
+{
+  "scene": "9. When something breaks: the refused card, Bosun's trace in the Journal (r-2 filed, taken, resolved with its fix card), one deploy question. Bosun's Logins panel prints this machine's config paths, so the scene's css hides it from the first paint; the edit keeps every Journal row but r-2's and the deploy ask's out of frame",
+  "seed": "breaks",
+  "start": "/?view=attention",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scale": 2,
+  "hero": "the refusal",
+  "names": {
+    "refused": "button.row:has-text('Cache report queries')",
+    "reason": "#body :text('refused')",
+    "ask": "article.cask",
+    "deploy": "article.cask :text('Deploy next to main?')",
+    "hide_logins": "section.clogins",
+    "needs_tab": "button.ctab:has-text('Needs you')",
+    "journal_tab": "button.ctab:has-text('Journal')",
+    "r2_filed": ":text('r-2 filed')",
+    "r2_resolved": ":text('r-2 resolved')"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "refused",
+      "label": "needs you",
+      "pause": 2500
+    },
+    {
+      "do": "click",
+      "target": "refused",
+      "label": "the refusal",
+      "pause": 4000
+    },
+    {
+      "do": "goto",
+      "url": "/console",
+      "label": "bosun",
+      "pause": 0,
+      "still": false
+    },
+    {
+      "do": "wait",
+      "target": "button.ctab",
+      "label": "bosun page",
+      "pause": 2500
+    },
+    {
+      "do": "click",
+      "target": "journal_tab",
+      "label": "the trace",
+      "pause": 5000
+    },
+    {
+      "do": "click",
+      "target": "needs_tab",
+      "label": "one question",
+      "pause": 4500
+    }
+  ],
+  "css": "section.clogins{display:none !important}"
+}

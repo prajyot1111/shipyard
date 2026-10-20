@@ -1,0 +1,10 @@
+# The noun guard's exceptions (tests/nouns.py, c-630): `path | literal | why`, one per line.
+# `literal` is a piece of the flagged literal's text, or `*` for the whole file. An entry
+# that matches nothing fails the guard, so this list only holds what is still there.
+keel/terms.py | * | the core's neutral defaults: the one file in core that spells the words
+keel/planlint.py | PR body | a section name of the plan format, matched by the lint and the work adapter
+keel/planbrief.py | PR body | a section name of the plan format, named in the brief's outcome sections
+keel/plancard.py | PR body | a section name of the plan format, on the card every house reads
+keel/deckstate.py | PR body | a section name of the plan format, which the card pane reads
+app/ui.cards.js | PR body | a section name of the plan format, as the card pane labels it
+keel/repair.py | a landing or a pull request waits | Bosun's own authority module, changed only on a card of its own

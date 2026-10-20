@@ -1,0 +1,26 @@
+{
+  "scripts": [
+    "ui.core.js", "ui.leave.js", "ui.live.js", "ui.idle.js", "ui.findcore.js", "ui.findpages.js",
+    "ui.find.js", "ui.tips.js", "ui.modal.js", "ui.receipt.js", "ui.shipping.js",
+    "ui.shipsendback.js", "ui.landpush.js", "ui.stuckcard.js", "ui.cards.js", "ui.tree.js",
+    "ui.reviews.js", "ui.views.js", "ui.atlas.js", "ui.stuck.js", "ui.signin.js", "ui.setup.js",
+    "ui.settings.js", "ui.startchecks.js", "ui.startbosun.js", "ui.startrepos.js",
+    "ui.startmemory.js", "ui.startdrafts.js", "ui.startlands.js", "ui.flowpicture.js",
+    "ui.startships.js", "ui.startbrowser.js", "ui.startbackup.js", "ui.startcard.js",
+    "ui.startdone.js", "ui.start.js", "ui.boardlayout.js", "ui.board.js", "ui.boardlist.js",
+    "ui.boardfull.js", "ui.boardcallout.js", "ui.boarddelete.js", "ui.js"
+  ],
+  "views": [
+    { "key": "start", "name": "Start", "icon": "▶", "render": "viewStart", "script": "ui.start.js", "needs": [], "rail": "until-finished" },
+    { "key": "now", "name": "Now", "icon": "◆", "render": "viewNow", "script": "ui.views.js", "needs": [], "dock": true },
+    { "key": "attention", "name": "Attention", "icon": "◉", "render": "viewAttention", "script": "ui.views.js", "needs": [], "dock": true },
+    { "key": "cards", "name": "Cards", "icon": "▦", "render": "viewCards", "script": "ui.cards.js", "needs": ["repos"], "dock": true },
+    { "key": "board", "name": "Board", "icon": "▨", "render": "viewBoard", "script": "ui.board.js", "needs": [] },
+    { "key": "segments", "name": "Segments", "icon": "▤", "render": "viewSegments", "script": "ui.views.js", "needs": ["segments"], "dock": "when-ready" },
+    { "key": "atlas", "name": "Atlas", "icon": "☷", "render": "viewAtlas", "script": "ui.atlas.js", "needs": [] },
+    { "key": "setup", "name": "Setup", "icon": "⚙", "render": "viewSetup", "script": "ui.setup.js", "needs": [] },
+    { "key": "settings", "name": "Settings", "icon": "☰", "render": "viewSettings", "script": "ui.settings.js", "needs": [] },
+    { "key": "reviews", "name": "Reviews", "icon": "▣", "render": "viewRoute", "arg": "reviews", "script": "ui.reviews.js", "needs": ["codehost", "reviews"], "rail": "when-declared" },
+    { "key": "more", "name": "More", "icon": "⋯", "render": "viewMore", "script": "ui.views.js", "needs": [], "dock": true, "nav": false }
+  ]
+}

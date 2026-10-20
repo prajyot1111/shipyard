@@ -1,0 +1,1072 @@
+#!/usr/bin/env bash
+# keel-backup-selftest - prove the parts of keel-backup that a real run cannot show you.
+#
+# Most of keel-backup can be checked by running it: a snapshot either reaches the store or
+# it does not. Some of its promises cannot be checked that way, and they are the ones that
+# matter:
+#
+#   RETENTION only does anything to snapshots older than each set's hourly window (read
+#   from keel-backup itself, not hardcoded here), so the first real evidence that the
+#   policy works would otherwise arrive days after anyone stopped watching. Here it is
+#   exercised in a second, against fabricated ids spanning a year.
+#
+#   PUBLISHING IS PROVEN, NOT ASSUMED. A snapshot that could not reach the store waits in
+#   pending/ and goes first next run; latest.json is only ever written after the store's
+#   own md5 of the blob matches. A real run cannot show you the failure half of that.
+#
+#   THE REFUSALS are the paths that only run when something has already gone wrong: a
+#   restore aimed inside a live checkout, a missing key beside an existing history, a
+#   second machine writing a set the first one still owns. All are guards against damage,
+#   so "it looked fine" is not evidence about any of them.
+#
+#   THE ALARMS, raised and retired by exactly the runs that may raise and retire them,
+#   including the store verify's clearing rules, which the git version could only prove
+#   by hand against the real remote. A `file:` store is a real store, not a test double:
+#   the same code path the Drive store takes, minus rclone.
+#
+#   THE BOARD IS TAKEN THROUGH SQLITE'S BACKUP API rather than read off the live tree, so
+#   a snapshot taken mid-write is not a torn file.
+#
+#   THE HELM SET HAS ITS OWN KEY, and the move off GitHub re-encrypts it: asserted by
+#   trying the other key and watching it fail.
+#
+# It touches nothing real: a temporary KEEL_HOME with invented data, a directory standing
+# in for the store, and a stub `kb` holding a JSON file of notices instead of the real
+# board. Nothing here needs the network and nothing here can write to the live backup. When
+# rclone is installed, a second pass runs the core of it through rclone's own `local`
+# backend, so the rclone code path (and the refused-token alarm, through a stub rclone that
+# says invalid_grant) is exercised too. The box has no rclone, and skips that pass.
+#
+#   keel-backup-selftest          run everything, print a line per check
+
+set -uo pipefail
+
+BACKUP="$(cd "$(dirname "$0")" && pwd)/keel-backup"
+[ -x "$BACKUP" ] || { echo "no keel-backup beside $0" >&2; exit 2; }
+
+ROOT="$(mktemp -d "${TMPDIR:-/tmp}/keel-backup-selftest.XXXXXX")"
+trap 'chmod -R u+rwx "$ROOT" 2>/dev/null; rm -rf "$ROOT"' EXIT
+KEEL="$ROOT/keel"
+FAKE="$ROOT/harbor"
+HELM="$ROOT/claude"
+BH="$ROOT/backup"
+SD="$ROOT/store"
+NOTICES="$ROOT/notices.json"
+STORE="file:$SD"
+HOST_A="selftest-mac"
+KSNAP="$SD/sets/keel/snapshots"
+HASNAP="$SD/sets/harbor/snapshots"
+HSNAP="$SD/sets/helm/snapshots"
+
+pass=0; fail=0
+ok()   { printf '  ok    %s\n' "$*"; pass=$((pass+1)); }
+bad()  { printf '  FAIL  %s\n' "$*"; fail=$((fail+1)); }
+check(){ if [ "$1" = "$2" ]; then ok "$3"; else bad "$3 (expected '$2', got '$1')"; fi; }
+has()  { if [ -e "$1" ]; then echo yes; else echo no; fi; }
+count(){ find "$1" -name '*.tar.gz.gpg' 2>/dev/null | wc -l | tr -d ' '; }
+newest(){ find "$1" -name '*.tar.gz.gpg' 2>/dev/null | LC_ALL=C sort | tail -1; }
+
+# Every run names its whole configuration, so nothing falls through to `keel backup env`.
+run() { KEEL_HOME="$KEEL" KEEL_HARBOR_HOME="$FAKE" KEEL_HELM_HOME="$HELM" KEEL_BACKUP_HOME="$BH" \
+        KEEL_BACKUP_STORE="$STORE" KEEL_BACKUP_SETS="${SETS_UNDER_TEST:-keel harbor helm}" \
+        KEEL_BACKUP_EXTRA="${EXTRA_UNDER_TEST-harbor helm}" \
+        KEEL_BACKUP_HOST="${HOST_UNDER_TEST:-$HOST_A}" KEEL_BACKUP_PULL=1 \
+        KEEL_BACKUP_RCLONE_CONFIG="${RCONF:-$ROOT/none.conf}" \
+        NOTICES_PATH="$NOTICES" "$BACKUP" "$@" 2>&1; }
+jq_status() {           # $1 = python expression over the parsed status json
+  run status --json | python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"
+}
+latest_of() {           # $1 = set, $2 = field of the store's latest.json
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' \
+    "$SD/sets/$1/latest.json" "$2" 2>/dev/null
+}
+decrypts_with() {       # $1 = keyfile, $2 = blob; yes when gpg can open it
+  if gpg --batch --quiet --no-tty --pinentry-mode loopback --passphrase-file "$1" \
+       --decrypt "$2" >/dev/null 2>&1; then echo yes; else echo no; fi
+}
+# The stub board's state, read the way an assertion wants it: is there an OPEN notice under
+# this key, and is the one under this key done? A keyed notice is the whole alarm contract,
+# so both directions are asked directly rather than by grepping a log of argv.
+notice() {              # $1 = open|done|title, $2 = key
+  python3 -c 'import json,sys
+try: cards = json.load(open(sys.argv[1]))
+except Exception: cards = []
+want, key = sys.argv[2], sys.argv[3]
+hit = [c for c in cards if c["options"].get("notice_key") == key]
+if want == "open": print("yes" if any(c["stage"] != "done" for c in hit) else "no")
+elif want == "title": print(hit[-1]["title"] if hit else "")
+else: print("yes" if hit and all(c["stage"] == "done" for c in hit) else "no")' "$NOTICES" "$1" "$2"
+}
+notices_reset() { rm -f "$NOTICES"; }
+state_of() { python3 -c 'import json,sys
+print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$BH/state.json" "$1"; }
+state_put() { python3 - "$BH/state.json" "$1" "$2" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d[sys.argv[2]] = sys.argv[3]
+json.dump(d, open(p, "w"))
+PY
+}
+
+# --- a Keel-shaped home, the live set ------------------------------------------------
+# state/ is the whole point of this set: the board is the only store, and a card directory
+# holds the plan and the output a session wrote once and will never write again.
+mkdir -p "$KEEL/bin" "$KEEL/state/cards/c-001" "$KEEL/state/voice/cache" \
+         "$KEEL/state/logs" "$KEEL/state/worktrees/old-card" "$KEEL/state/fetch-locks" \
+         "$KEEL/state/drafts/demo" "$KEEL/state/cards/c-001/scratch/node_modules/pkg" \
+         "$KEEL/segments/daybook/data/inbox" "$KEEL/segments/fathom/data/asks"
+python3 - "$KEEL/state/board.db" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("pragma journal_mode=wal")
+db.execute("create table cards (id text primary key, title text)")
+db.execute("insert into cards values ('c-001', 'a card that exists nowhere else')")
+db.commit(); db.close()
+PY
+echo 'the plan'          > "$KEEL/state/cards/c-001/plan.md"
+echo '{"said":"hello"}'  > "$KEEL/state/voice/transcript.jsonl"
+echo '{"items":[]}'      > "$KEEL/segments/daybook/data/items.json"
+# What must NOT leave, and what must not be archived. The two keys are credentials, which
+# never leave this machine encrypted or not. The pid names a process on THIS laptop. The
+# cache is regenerable by saying the line again and is the biggest thing in the tree, which
+# is exactly the shape of the scope bug that took the old repo to 2.5GB. The logs and the
+# worktrees are a record of how the state got here and a checkout of a repo that has its
+# own history, neither of which is state.
+echo 'a-secret-token'    > "$KEEL/state/human.token"
+echo 'a-secret-key'      > "$KEEL/state/artifact.key"
+echo '4242'              > "$KEEL/state/talker.pid"
+echo 'fake wav'          > "$KEEL/state/voice/cache/0a1b2c3d.wav"
+echo 'keel up'           > "$KEEL/state/logs/keel.out.log"
+echo 'a worktree file'   > "$KEEL/state/worktrees/old-card/README"
+echo 'pid'               > "$KEEL/state/fetch-locks/.fetch-daybook.lock"
+# Scratch media and a dependency tree: on 2026-09-28 these took a snapshot from 26MB to 173MB.
+echo 'fake mp4'          > "$KEEL/state/drafts/demo/film.mp4"
+echo 'module.exports=1'  > "$KEEL/state/cards/c-001/scratch/node_modules/pkg/index.js"
+echo 'scratch notes'     > "$KEEL/state/cards/c-001/scratch/notes.md"
+mkdir -p "$KEEL/state/cards/c-001/out"
+echo 'fake film'         > "$KEEL/state/cards/c-001/out/demo.MP4"
+echo 'fake stem'         > "$KEEL/state/cards/c-001/out/voice.wav"
+echo 'the outcome'       > "$KEEL/state/cards/c-001/out/summary.md"
+# A landing's whole test output, about 0.9MB a card on the real board (c-671). It is named
+# exactly: another log in a card directory may be the card's evidence, and stays.
+echo 'Ran 4000 tests'    > "$KEEL/state/cards/c-001/merged-tests.log"
+echo 'what the run said' > "$KEEL/state/cards/c-001/evidence.log"
+echo 'Ran 4000 tests'    > "$KEEL/state/cards/c-001/out/merged-tests.log"
+# The install's own things, which left the code in c-722: each a root of this set, each with
+# its own git repo whose .git stays out (the files are what is archived).
+for d in memory/bosun memory/talker identity packs/work history/docs; do mkdir -p "$KEEL/$d"; done
+echo 'bosun index'       > "$KEEL/memory/bosun/MEMORY.md"
+echo 'talker rules'      > "$KEEL/memory/talker/CLAUDE.md"
+git -C "$KEEL/memory" init -q -b main
+git -C "$KEEL/memory" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m 'the memory, committed'
+mkdir -p "$KEEL/packs/.git"
+echo 'ref: refs/heads/main' > "$KEEL/packs/.git/HEAD"        # a repo with no commit yet: no bundle
+mkdir -p "$KEEL/spaces/personal" "$KEEL/claude/projects/-home-talker/memory"
+echo 'my own rules'      > "$KEEL/spaces/personal/space-personal.md"
+echo 'a lesson'          > "$KEEL/claude/projects/-home-talker/memory/MEMORY.md"
+echo 'a transcript'      > "$KEEL/claude/projects/-home-talker/session.jsonl"
+mkdir -p "$KEEL/state/cards/c-001/scratch/web/.git"
+echo 'checked out'       > "$KEEL/state/cards/c-001/scratch/web/app.js"
+echo 'ref: refs/heads/main' > "$KEEL/state/cards/c-001/scratch/web/.git/HEAD"
+mkdir -p "$KEEL/state/cards/c-001/scratch/research/vendor/.git"
+echo 'a vendored copy'   > "$KEEL/state/cards/c-001/scratch/research/vendor/lib.js"
+# c-752: plain copies of a repo's source with no .git anywhere, which is what one done card
+# held on 2026-10-11 (104MB of a 302MB snapshot). A card's scratch/ goes whole.
+mkdir -p "$KEEL/state/cards/c-001/scratch/copy-1/src" "$KEEL/state/cards/c-001/out/node_modules/pkg"
+echo 'a plain copy'      > "$KEEL/state/cards/c-001/scratch/copy-1/src/app.js"
+echo 'module.exports=2'  > "$KEEL/state/cards/c-001/out/node_modules/pkg/index.js"
+echo 'about the user'    > "$KEEL/identity/about-you.md"
+echo 'name = "work"'     > "$KEEL/packs/work/pack.toml"
+echo 'decided'           > "$KEEL/history/docs/decisions.md"
+mkdir -p "$KEEL/state/cards/c-001/out/scratch"; echo "kept" > "$KEEL/state/cards/c-001/out/scratch/kept.md"
+
+# A stub board: a JSON file of notices, with the three verbs keel-backup's queue() speaks.
+# It is a simulator rather than an argv log because the alarm contract is about STATE (is
+# there an open card under this key) and a log of calls cannot answer that.
+cat > "$KEEL/bin/kb" <<'STUB'
+#!/usr/bin/env python3
+import json, os, sys
+path = os.environ["NOTICES_PATH"]
+try: cards = json.load(open(path))
+except Exception: cards = []
+argv = sys.argv[1:]
+verb = argv[0] if argv else ""
+def flag(name, default=""):
+    return argv[argv.index(name) + 1] if name in argv else default
+if verb == "list":
+    print(json.dumps(cards))
+elif verb == "create":
+    key = flag("--option").split("=", 1)[-1]
+    cards.append({"id": "n-%d" % (len(cards) + 1), "stage": "inbox",
+                  "title": flag("--title"), "brief": flag("--brief"),
+                  "options": {"notice_key": key}})
+elif verb == "set":
+    for card in cards:
+        if card["id"] == argv[1]:
+            for item in argv[2:]:
+                name, _, value = item.partition("=")
+                card[name] = value
+elif verb == "stage":
+    for card in cards:
+        if card["id"] == argv[1]:
+            card["stage"] = argv[2]
+else:
+    sys.exit(2)
+json.dump(cards, open(path, "w"))
+STUB
+chmod +x "$KEEL/bin/kb"
+export NOTICES_PATH="$NOTICES"
+
+# --- a Harbor-shaped home, the set that froze at cutover -----------------------------
+mkdir -p "$FAKE/bin" "$FAKE/secrets" "$FAKE/ledger/reviews" \
+         "$FAKE/segments/fathom/data" "$FAKE/segments/daybook/data/inbox"
+echo '{"asks":[]}'      > "$FAKE/segments/fathom/data/index.json"
+echo '{"n":1}'          > "$FAKE/segments/fathom/data/state.json"
+echo '{"items":[]}'     > "$FAKE/segments/daybook/data/items.json"
+echo '{"drop":1}'       > "$FAKE/segments/daybook/data/inbox/one.json"
+# EMPTY, and it has to survive the round trip. segments/README.md makes data/asks/ the
+# place a fetcher writes an ask and data/inbox/ the single door an answer comes back
+# through, so a restore that quietly drops them leaves the worker with nowhere to write.
+# The first restore of the live data did exactly that, because a tar built from a list of
+# files records no directory at all.
+mkdir -p "$FAKE/segments/fathom/data/asks" "$FAKE/segments/fathom/data/inbox"
+echo '{"id":"a"}'       > "$FAKE/ledger/dispatches.jsonl"
+echo '{"id":"q"}'       > "$FAKE/ledger/queue.jsonl"
+echo 'finding'          > "$FAKE/ledger/reviews/branch-x.md"
+# THE TWO THAT WERE PROTECTED BY NOTHING, plus the two that deliberately still are.
+# returns and briefs are gitignored as runtime state AND used to sit outside every root
+# in harbor_roots, so they fell through the gap between git and the backup and lived on
+# one disk. settings and panes are gitignored too and are still out on purpose: a
+# settings file is regenerated from the dispatch id and names absolute paths on the
+# machine that wrote it, and a pane is a frame of a failed spawn with a lifetime of
+# hours. Both directions are asserted at the restore below, so the judgement stays a
+# judgement rather than quietly becoming whatever the glob happens to do next.
+mkdir -p "$FAKE/ledger/returns" "$FAKE/ledger/briefs" \
+         "$FAKE/ledger/settings" "$FAKE/ledger/panes"
+echo '{"state":"done","note":"what came of it"}' > "$FAKE/ledger/returns/abc123.jsonl"
+echo '# the brief this dispatch was given'       > "$FAKE/ledger/briefs/abc123.md"
+echo '{"hooks":{}}'                              > "$FAKE/ledger/settings/abc123.json"
+echo 'the pane a failed spawn was showing'       > "$FAKE/ledger/panes/abc123.txt"
+
+# The residue the scope is supposed to skip. If any of it lands in a snapshot the file
+# count assertions below go wrong, which is the point of putting it here.
+mkdir -p "$FAKE/segments/fathom/data/__pycache__" "$FAKE/ledger/.fetch-fathom.lock"
+echo 'junk' > "$FAKE/segments/fathom/data/__pycache__/x.pyc"
+echo 'pid'  > "$FAKE/ledger/.fetch-fathom.lock/pid"
+echo 'tmp'  > "$FAKE/ledger/queue.jsonl.lock"
+# filler-audio (card c-092): a regenerable TTS cache, same class as __pycache__ above, and
+# the one that actually caused the size incident this card fixed. A fake "clip" here proves
+# the exclusion, not just documents it.
+mkdir -p "$FAKE/segments/voice/data/filler-audio"
+echo 'fake wav' > "$FAKE/segments/voice/data/filler-audio/0a1b2c3d.wav"
+# .tmp-* (card c-092 review round 2): harbor-live-status and harbor_voice/bus.py both
+# write these via tempfile.mkstemp(prefix=".tmp-") then os.replace() them away, so one
+# sitting in a backed-up root is a real, ordinary thing to see mid-write, not residue from
+# a crash. Left in place (unlike a real atomic write, which renames it away quickly) so it
+# is still there when the archive is built, proving the exclusion rather than the race.
+echo 'mid-write' > "$FAKE/segments/fathom/data/.tmp-abc123.json"
+
+# --- a Helm-shaped ~/.claude, the second set ----------------------------------------
+# The retired review scanner's and PR watch's directories, the two ~/.claude/.gitignore
+# keeps out of the claude-config repo and so the only copies there are. Both tools are
+# retired (Keel lane RETIRE, 2026-09-24) and the set now keeps their HISTORY, read-only:
+# pr-reviews entire, and pr-watch's context notes with their screenshots, which old cards
+# link into. The watcher's own caches (its watchlist, its status files, its model choice)
+# are state nothing reads any more, and are left out.
+mkdir -p "$HELM/pr-reviews/findings" "$HELM/pr-reviews/orientation" \
+         "$HELM/pr-watch/status" "$HELM/pr-watch/watch" \
+         "$HELM/pr-watch/context/_archived" "$HELM/pr-watch/context/_assets/cloud__feature-x"
+echo '{"prs":{}}'          > "$HELM/pr-reviews/state.json"
+echo '# a finding'         > "$HELM/pr-reviews/findings/cloud-1.md"
+echo '# orientation'       > "$HELM/pr-reviews/orientation/cloud-1.md"
+echo '{"checked_at":"t1"}' > "$HELM/pr-watch/status/cloud-1.json"
+echo '{"pr":1}'            > "$HELM/pr-watch/watch/cloud-1.json"
+echo '{"model":"opus"}'    > "$HELM/pr-watch/model.json"
+echo 'pr context'          > "$HELM/pr-watch/context/cloud__feature-x.md"
+echo 'archived context'    > "$HELM/pr-watch/context/_archived/cloud__old.md"
+echo 'a screenshot'        > "$HELM/pr-watch/context/_assets/cloud__feature-x/shot.png"
+# EMPTY, and it has to survive, for the same reason the Harbor set's drop directories do:
+# a tar built from a list of files records no directory at all.
+mkdir -p "$HELM/pr-watch/context/_assets/cloud__empty"
+
+# THE THINGS THAT MUST NOT LEAVE, and the things that must not be archived. The .env is the
+# one that matters most: the real file holds four live Slack webhook URLs, and credentials
+# never leave this machine, encrypted or not. The rest would either restore as lies (a pid
+# and a port naming a process on a dead laptop, a lock nothing will release) or would make
+# the manifest change on every single run.
+echo 'SLACK_WEBHOOK_URL=https://hooks.slack.com/services/NOT-A-REAL-ONE' > "$HELM/pr-reviews/.env"
+echo 'scanning...'    > "$HELM/pr-reviews/helm.log"
+echo 'scanning...'    > "$HELM/pr-watch/scan.log"
+echo '4242'           > "$HELM/pr-reviews/helm.pid"
+echo '8899'           > "$HELM/pr-reviews/helm.port"
+echo 'held'           > "$HELM/pr-watch/.watcher.lock"
+mkdir -p "$HELM/pr-reviews/__pycache__"; echo 'junk' > "$HELM/pr-reviews/__pycache__/x.pyc"
+
+mkdir -p "$BH" "$SD"
+
+echo "keel-backup-selftest (store: $STORE)"
+
+# --- 1. first snapshot ---------------------------------------------------------------
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c 'snapshot .* published')" "3" "first run publishes one snapshot per set"
+check "$(count "$HASNAP")" "1" "one Harbor snapshot, under sets/harbor/ like the others"
+check "$(count "$HSNAP")"  "1" "one Helm snapshot under its own prefix"
+check "$(count "$KSNAP")"  "1" "one Keel snapshot under its own prefix"
+check "$(latest_of keel host)" "$HOST_A" "latest.json names the host that wrote the set"
+check "$(notice open backup-passphrase)" "yes" "a new key stages the passphrase for a password manager"
+check "$(notice title backup-passphrase)" "Put the Shipyard backup passphrase in your password manager" \
+  "and names it for the product (c-729)"
+check "$(notice open backup-passphrase-helm)" "yes" "and the helm set's own key gets its own card"
+check "$(decrypts_with "$BH/backup-helm.key" "$(newest "$HSNAP")")" "yes" "the helm snapshot opens with the helm key"
+check "$(decrypts_with "$BH/backup.key" "$(newest "$HSNAP")")" "no" \
+      "and NOT with the shared key, which is the one the box holds"
+check "$(find "$SD" -type f -perm -004 | wc -l | tr -d ' ')" "0" "nothing in the store is readable by other users"
+check "$(jq_status 'd["sets"]["keel"]["snapshots_kept"]')"   "1" "status agrees one Keel snapshot is retained"
+check "$(jq_status 'd["sets"]["harbor"]["snapshots_kept"]')" "1" "status agrees one Harbor snapshot is retained"
+check "$(jq_status 'd["snapshots_kept"]')" "3" "and the store-wide figure counts all three"
+
+# --- 2. an unchanged run must not publish ---------------------------------------------
+files_before="$(find "$SD" -type f | wc -l | tr -d ' ')"
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c 'nothing to publish')" "3" "an unchanged run is skipped for EVERY set, not re-encrypted"
+check "$(find "$SD" -type f | wc -l | tr -d ' ')" "$files_before" "and the store is untouched"
+
+# --- 3. a changed run publishes one object --------------------------------------------
+echo '{"n":2}' > "$FAKE/segments/fathom/data/state.json"
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c '\[harbor\] snapshot .* published')" "1" "a changed file produces a new snapshot"
+check "$(find "$SD" -type f | wc -l | tr -d ' ')" "$((files_before + 1))" \
+      "and exactly one new object reaches the store, not the whole retained set"
+check "$(latest_of harbor snapshot)" "$(basename "$(newest "$HASNAP")" .tar.gz.gpg)" \
+      "latest.json names the newest blob"
+
+# --- 3b. a snapshot that could not reach the store is not a quiet night ---------------
+# The git version's hole: a failed push left latest.json matching the live data, so the
+# next run skipped as unchanged and the snapshot stayed on the laptop forever. Here the
+# store refuses the put (a directory it cannot write), the snapshot waits in pending/, and
+# the next run publishes it before anything else, with no change needed to prompt it.
+notices_reset
+echo '{"n":"3b"}' > "$FAKE/segments/fathom/data/state.json"
+month_dir="$(dirname "$(newest "$HASNAP")")"
+chmod 500 "$month_dir"
+out="$(run snapshot)"; rc=$?
+chmod 700 "$month_dir"
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a put the store refuses fails the run"
+check "$(echo "$out" | grep -c 'is waiting in')" "1" "and says where the snapshot is waiting"
+check "$(count "$BH/work/harbor/pending")" "1" "the proven blob waits in pending/"
+check "$(notice open backup-stale)" "yes" "the failure reaches the board"
+pending_id="$(basename "$(newest "$BH/work/harbor/pending")" .tar.gz.gpg)"
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c '\[harbor\] published 1 snapshot')" "1" "the next run publishes the waiting snapshot first"
+check "$(latest_of harbor snapshot)" "$pending_id" "and latest.json then names it"
+check "$(echo "$out" | grep -c '\[harbor\] unchanged')" "1" "after which the live data is correctly unchanged"
+check "$(has "$BH/work/harbor/pending")" "no" "pending/ is empty again"
+# A run killed mid-gpg leaves half a blob under its .part name. It is never published.
+mkdir -p "$BH/work/harbor/pending"; echo 'half a blob' > "$BH/work/harbor/pending/29990101T000000Z.tar.gz.gpg.part"
+run snapshot >/dev/null
+check "$(count "$HASNAP/2999")" "0" "a half-written blob from a killed run is never published"
+check "$(has "$BH/work/harbor/pending/29990101T000000Z.tar.gz.gpg.part")" "no" "and it is cleared away"
+# A blob under its final name with no latest.json beside it was never proven either (the
+# meta write failed, or an older version of this tool was killed): discarded, not published.
+mkdir -p "$BH/work/harbor/pending"; echo 'unproven' > "$BH/work/harbor/pending/29990102T000000Z.tar.gz.gpg"
+out="$(run snapshot)"
+check "$(count "$HASNAP/2999")" "0" "a blob with no proof beside it is never published"
+check "$(echo "$out" | grep -c 'discarding 29990102T000000Z')" "1" "and the run says it discarded it"
+check "$(notice done backup-stale)" "yes" "and the failure card is retired"
+
+# --- 4. retention --------------------------------------------------------------------
+# Fabricated ids across a year, straight into the store. Only the names matter: retention
+# reads the timestamp out of the filename, which is why the format is fixed and UTC.
+#
+# THE HOURLY BOUNDARY IS READ FROM THE SCRIPT UNDER TEST, not hardcoded here, so this fails
+# loudly if the two ever disagree instead of certifying whichever window is in the source.
+HOURLY_DAYS="$(grep -oE 'harbor\) echo [0-9]+ ;;  helm\)' "$BACKUP" | grep -oE '[0-9]+')"
+[ -n "$HOURLY_DAYS" ] || { echo "could not read harbor's hourly retention window out of $BACKUP" >&2; exit 2; }
+mk() { local id="$1"; local d="$HASNAP/${id:0:4}/${id:4:2}"; mkdir -p "$d"; echo x > "$d/$id.tar.gz.gpg"; chmod 600 "$d/$id.tar.gz.gpg"; }
+python3 - "$ROOT/ids" "$ROOT/expected_young" "$HOURLY_DAYS" <<'PY'
+import datetime, sys
+now = datetime.datetime.now(datetime.timezone.utc)
+hourly_days = int(sys.argv[3])
+ids = []
+expected_young = 0
+for h in range(1, 24 * 10, 3):            # every 3h back through 10 days
+    ids.append((now - datetime.timedelta(hours=h)).strftime("%Y%m%dT%H%M%SZ"))
+    if h <= hourly_days * 24:
+        expected_young += 1
+for d in (30, 30, 45, 45, 80):            # inside the daily tier, two pairs same-day
+    ids.append((now - datetime.timedelta(days=d)).strftime("%Y%m%dT%H%M%SZ"))
+    ids.append((now - datetime.timedelta(days=d, hours=5)).strftime("%Y%m%dT%H%M%SZ"))
+for d in (100, 130, 200, 210, 300):       # beyond it, monthly
+    ids.append((now - datetime.timedelta(days=d)).strftime("%Y%m%dT%H%M%SZ"))
+open(sys.argv[1], "w").write("\n".join(sorted(set(ids))) + "\n")
+open(sys.argv[2], "w").write(str(expected_young) + "\n")
+PY
+expected_young="$(cat "$ROOT/expected_young")"
+while read -r id; do [ -n "$id" ] && mk "$id"; done < "$ROOT/ids"
+before="$(count "$HASNAP")"
+echo '{"n":3}' > "$FAKE/segments/fathom/data/state.json"
+out="$(run snapshot)"
+after="$(count "$HASNAP")"
+
+python3 - "$HASNAP" "$HOURLY_DAYS" > "$ROOT/verdict" <<'PY'
+import datetime, os, sys
+now = datetime.datetime.now(datetime.timezone.utc)
+hourly_days = int(sys.argv[2])
+kept = []
+for dp, _d, fs in os.walk(sys.argv[1]):
+    for f in fs:
+        if f.endswith(".tar.gz.gpg"):
+            kept.append(f[: -len(".tar.gz.gpg")])
+days, months, young = {}, {}, 0
+for sid in kept:
+    ts = datetime.datetime.strptime(sid, "%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+    age = (now - ts).total_seconds() / 86400.0
+    if age <= hourly_days:
+        young += 1
+    elif age <= 90:
+        days.setdefault(sid[:8], []).append(sid)
+    else:
+        months.setdefault(sid[:6], []).append(sid)
+print(young, max([len(v) for v in days.values()] or [0]), max([len(v) for v in months.values()] or [0]))
+PY
+read -r young maxday maxmonth < "$ROOT/verdict"
+if [ "$after" -lt "$before" ]; then ok "retention pruned $((before - after)) of $before snapshots from the store"
+else bad "retention deleted nothing (before $before, after $after)"; fi
+if [ "$young" -ge "$expected_young" ]; then
+  ok "everything inside the ${HOURLY_DAYS}-day hourly window survived ($young, at least $expected_young expected)"
+else
+  bad "the hourly tier lost snapshots (got $young, expected at least $expected_young)"
+fi
+check "$maxday" "1" "at most one snapshot per day survives in the daily tier"
+check "$maxmonth" "1" "at most one snapshot per month survives beyond 90 days"
+check "$(jq_status 'd["sets"]["harbor"]["snapshots_kept"]')" "$after" \
+      "status counts the store's retained set, as of this run's listing"
+
+# --- 4b. a truncated archive is refused, not silently published -----------------------
+# tar hits a real read error on a file it cannot open (chmod 000) and exits non-zero.
+# Without the check on the archive pipeline, this run would have published a snapshot
+# missing whatever tar could not read. Root reads everything, so the check is skipped there.
+if [ "$(id -u)" != 0 ]; then
+  BADFILE="$FAKE/segments/fathom/data/unreadable.json"
+  echo '{"secret":1}' > "$BADFILE"
+  chmod 000 "$BADFILE"
+  echo '{"n":99}' > "$FAKE/segments/fathom/data/state.json"   # force a real change too
+  before_n="$(count "$HASNAP")"
+  out="$(run snapshot)"; rc=$?
+  chmod 644 "$BADFILE"; rm -f "$BADFILE"
+  echo '{"n":3}' > "$FAKE/segments/fathom/data/state.json"    # back to what section 5 expects
+  check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "an unreadable file fails the run, not just a warning"
+  check "$(echo "$out" | grep -c 'refusing to snapshot a possibly incomplete tree')" "1" \
+        "and it says so, rather than publishing a truncated archive"
+  check "$(count "$HASNAP")" "$before_n" "and nothing new reached the store"
+fi
+notices_reset
+
+# --- 5. restore round trip, from the store -------------------------------------------
+mkdir -p "$ROOT/restored"
+run restore --set harbor --into "$ROOT/restored" >/dev/null
+if diff -r "$FAKE/segments/fathom/data" "$ROOT/restored/segments/fathom/data" \
+     --exclude __pycache__ --exclude '.tmp-*' >/dev/null 2>&1; then
+  ok "a tree restored from the store matches the source byte for byte"
+else
+  bad "the restored tree differs from the source"
+fi
+check "$(has "$ROOT/restored/segments/fathom/data/__pycache__")" "no" "excluded residue is absent from the restored tree"
+check "$(has "$ROOT/restored/segments/voice/data/filler-audio")" "no" "the filler-audio cache is not in scope (card c-092)"
+check "$(has "$ROOT/restored/segments/fathom/data/.tmp-abc123.json")" "no" \
+      "an atomic-write temp file is not in scope, so its own rename race cannot fail a snapshot"
+check "$(has "$ROOT/restored/ledger/queue.jsonl.lock")" "no" "the queue lock file is not in scope"
+check "$([ -d "$ROOT/restored/segments/fathom/data/asks" ] && echo yes || echo no)" "yes" \
+      "empty drop directories survive the round trip"
+check "$(has "$ROOT/restored/ledger/returns/abc123.jsonl")" "yes" "a dispatch return survives the round trip"
+check "$(has "$ROOT/restored/ledger/briefs/abc123.md")" "yes" "and the brief that dispatch was given"
+check "$(has "$ROOT/restored/ledger/settings")" "no" \
+      "per-dispatch settings are NOT backed up, being regenerable and machine-local"
+check "$(has "$ROOT/restored/ledger/panes")" "no" "nor a captured pane, which is residue rather than state"
+
+# --- 6. the refusals -----------------------------------------------------------------
+out="$(run restore --set harbor --into "$FAKE/segments")"
+check "$(echo "$out" | grep -c 'refusing to restore')" "1" "a restore aimed inside the old checkout is refused"
+out="$(run restore --set keel --into "$KEEL/state")"
+check "$(echo "$out" | grep -c 'refusing to restore')" "1" \
+      "and one aimed inside the LIVE checkout, which is the one the engine is running from"
+
+mv "$BH/backup.key" "$ROOT/key.saved"
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c 'Refusing to generate a new passphrase')" "1" \
+      "a missing key beside an existing history refuses rather than orphaning it"
+check "$(notice open backup-stale)" "yes" "and that failure reaches the board"
+mv "$ROOT/key.saved" "$BH/backup.key"
+mv "$BH/backup-helm.key" "$ROOT/hkey.saved"
+out="$(run snapshot --set helm --force)"
+check "$(echo "$out" | grep -c 'Refusing to generate a new passphrase')" "1" \
+      "and the same refusal guards the helm set's own key"
+mv "$ROOT/hkey.saved" "$BH/backup-helm.key"
+
+echo '{"n":4}' > "$FAKE/segments/fathom/data/state.json"
+run snapshot >/dev/null
+check "$(notice done backup-stale)" "yes" "a later success retires the failure card"
+
+# --- 7. the two alarms must not be the same alarm ------------------------------------
+# The bug this catches shipped in the first version of this tool: verify used the
+# snapshot's key, so a verify failing at 04:30 on Sunday was retired by the 05:00 snapshot.
+notices_reset
+cp "$(newest "$HASNAP")" "$ROOT/good-blob"
+echo 'not a gpg file' > "$(newest "$HASNAP")"
+run verify >/dev/null 2>&1
+check "$(notice open backup-unreadable)" "yes" "an unreadable snapshot in the store raises its OWN alarm"
+check "$(notice open backup-stale)" "no" "and leaves the staleness key alone"
+echo '{"n":5}' > "$FAKE/segments/fathom/data/state.json"
+run snapshot >/dev/null
+check "$(notice done backup-unreadable)" "no" "a later successful SNAPSHOT does not retire the unreadable alarm"
+# THE CLEARING HALF, which the git version could only prove by hand against GitHub: a
+# store verify that reads the newest snapshot back retires the card. The newest harbor
+# snapshot is now a good one again (the run above published it).
+out="$(run verify)"; rc=$?
+check "$rc" "0" "a store verify of every set passes once the newest snapshot is readable"
+check "$(notice done backup-unreadable)" "yes" "and it retires the unreadable alarm"
+check "$(echo "$out" | grep -c 'nothing shared')" "1" "and it confirms nothing in the store is shared"
+check "$([ -n "$(state_of last_verify)" ] && echo yes || echo no)" "yes" "and stamps the verify clock"
+
+# --- 8. the other sets ----------------------------------------------------------------
+mkdir -p "$ROOT/restored-helm"
+run restore --set helm --into "$ROOT/restored-helm" >/dev/null
+check "$(has "$ROOT/restored-helm/pr-reviews/state.json")" "yes" "restore --set helm brings Helm's tree back"
+check "$(has "$ROOT/restored-helm/segments")" "no" "and no part of Harbor's tree comes with it"
+check "$(has "$ROOT/restored-helm/ledger")" "no" "including the ledger"
+check "$(has "$ROOT/restored/pr-reviews")" "no" "and a Harbor restore delivers no Helm state"
+
+# What must never leave the machine. The live pr-reviews/.env holds working webhook URLs.
+check "$(grep -rl 'hooks.slack.com' "$ROOT/restored-helm" 2>/dev/null | wc -l | tr -d ' ')" "0" \
+      "no webhook URL survives anywhere in the restored Helm tree"
+check "$(has "$ROOT/restored-helm/pr-reviews/.env")"          "no"  "the .env is not in scope"
+check "$(has "$ROOT/restored-helm/pr-reviews/helm.log")"      "no"  "logs are not in scope"
+check "$(has "$ROOT/restored-helm/pr-watch/scan.log")"        "no"  "in either directory"
+check "$(has "$ROOT/restored-helm/pr-reviews/helm.pid")"      "no"  "the pid file is not in scope"
+check "$(has "$ROOT/restored-helm/pr-reviews/helm.port")"     "no"  "nor the port file"
+check "$(has "$ROOT/restored-helm/pr-watch/.watcher.lock")"   "no"  "nor a lock nothing would release"
+check "$(has "$ROOT/restored-helm/pr-reviews/__pycache__")"   "no"  "nor the usual build residue"
+check "$(has "$ROOT/restored-helm/pr-reviews/findings/cloud-1.md")"          "yes" "findings survive"
+check "$(has "$ROOT/restored-helm/pr-watch/context/cloud__feature-x.md")"    "yes" "PR context survives"
+check "$(has "$ROOT/restored-helm/pr-watch/context/_archived/cloud__old.md")" "yes" "archived context survives"
+check "$(has "$ROOT/restored-helm/pr-watch/context/_assets/cloud__feature-x/shot.png")" "yes" "and the screenshots old cards embed"
+check "$(has "$ROOT/restored-helm/pr-watch/context/_assets/cloud__empty")"   "yes" "empty directories survive the round trip"
+check "$(has "$ROOT/restored-helm/pr-reviews/orientation/cloud-1.md")"       "yes" "the review scanner's history survives whole"
+# The retired watcher's own caches: nothing reads them, so nothing copies them (RETIRE).
+check "$(has "$ROOT/restored-helm/pr-watch/status")"      "no" "the retired watcher's status cache is not in scope"
+check "$(has "$ROOT/restored-helm/pr-watch/watch")"       "no" "nor its watchlist"
+check "$(has "$ROOT/restored-helm/pr-watch/model.json")"  "no" "nor its model choice"
+
+# The floor on how often the Helm set is snapshotted: a changed set inside it waits. The
+# change is a finding now; the watcher's status timestamps that used to churn it are out.
+echo '{"checked_at":"t2"}' > "$HELM/pr-watch/status/cloud-1.json"
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c '\[helm\] changed')" "0" \
+      "a retired cache moving is not a change to the set"
+echo '# a finding, edited' > "$HELM/pr-reviews/findings/cloud-1.md"
+out="$(run snapshot)"
+check "$(echo "$out" | grep -c '\[helm\] changed, but the last snapshot is only')" "1" \
+      "a changed Helm set inside its floor is not snapshotted again"
+check "$(count "$HSNAP")" "1" "so it still holds exactly one snapshot"
+harbor_before="$(count "$HASNAP")"
+out="$(run snapshot --set helm --force)"
+check "$(echo "$out" | grep -c '\[helm\] snapshot .* published')" "1" \
+      "--force is the door through the floor, and --set takes only the set named"
+check "$(count "$HASNAP")" "$harbor_before" "and Harbor's set was left alone by that run"
+
+# Retention is per set: three fabricated helm ids past its 2-day hourly tier, a pair on
+# one day and one two days older. Pinned to fixed hours so the pair is one UTC day whatever
+# time this runs.
+python3 - "$ROOT/hids" <<'PY'
+import datetime, sys
+now = datetime.datetime.now(datetime.timezone.utc)
+rows = [(3, 12), (3, 6), (5, 12)]
+open(sys.argv[1], "w").write("\n".join(
+    (now - datetime.timedelta(days=d)).replace(hour=h, minute=0, second=0,
+                                               microsecond=0).strftime("%Y%m%dT%H%M%SZ")
+    for d, h in rows) + "\n")
+PY
+hpath() { printf '%s/%s/%s/%s.tar.gz.gpg' "$HSNAP" "${1:0:4}" "${1:4:2}" "$1"; }
+h1="$(sed -n 1p "$ROOT/hids")"; h2="$(sed -n 2p "$ROOT/hids")"; h3="$(sed -n 3p "$ROOT/hids")"
+for id in "$h1" "$h2" "$h3"; do mkdir -p "$(dirname "$(hpath "$id")")"; echo x > "$(hpath "$id")"; chmod 600 "$(hpath "$id")"; done
+echo '{"prs":{"cloud-2":{}}}' > "$HELM/pr-reviews/state.json"
+run snapshot --set helm --force >/dev/null
+check "$(has "$(hpath "$h1")")" "yes" "the newest snapshot of a day survives Helm's daily tier"
+check "$(has "$(hpath "$h2")")" "no"  "the older one of the same day is pruned by Helm's daily tier"
+check "$(has "$(hpath "$h3")")" "yes" "and one per day survives out to Helm's 30-day boundary"
+
+# The sets' alarms must not be the same alarm either.
+notices_reset
+echo 'not a gpg file' > "$(newest "$HSNAP")"
+run verify >/dev/null 2>&1
+check "$(notice open backup-unreadable-helm)" "yes" "an unreadable Helm set raises an alarm under its OWN key"
+check "$(notice open backup-unreadable)" "no" "and leaves Harbor's key untouched"
+check "$(notice open backup-unreadable-keel)" "no" "and Keel's"
+check "$(notice open backup-stale)" "no" "and the staleness key is not involved at all"
+echo '{"prs":{"cloud-3":{}}}' > "$HELM/pr-reviews/state.json"
+run snapshot --set helm --force >/dev/null
+out="$(run verify --set helm)"
+check "$(notice done backup-unreadable-helm)" "yes" "a narrowed verify that reads the set back retires that set's card"
+
+# A set's root gone. Never written: skipped, not fatal (a machine that never ran Helm).
+# Written before: the data this machine promised to back up is gone, and that is loud.
+without_helm() { KEEL_HOME="$KEEL" KEEL_HARBOR_HOME="$FAKE" KEEL_HELM_HOME="$ROOT/no-such-claude" \
+       KEEL_BACKUP_HOME="$BH" KEEL_BACKUP_STORE="$1" KEEL_BACKUP_SETS="keel harbor helm" \
+       KEEL_BACKUP_HOST="$HOST_A" NOTICES_PATH="$NOTICES" "$BACKUP" snapshot 2>&1; }
+notices_reset
+out="$(without_helm "$STORE")"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a set whose root is gone, with snapshots in the store, fails the run"
+check "$(echo "$out" | grep -c 'is gone, but the store holds')" "1" "and says so rather than counting it a quiet hour"
+check "$(notice open backup-stale)" "yes" "and the board hears it"
+mkdir -p "$ROOT/fresh-store"
+out="$(KEEL_BACKUP_HOME="$ROOT/fresh-bh" without_helm "file:$ROOT/fresh-store")"; rc=$?
+check "$rc" "0" "a machine that never had Helm's directories still completes a snapshot run"
+check "$(echo "$out" | grep -c 'is not on this machine')" "1" \
+      "and says which set it skipped rather than failing silently"
+run snapshot >/dev/null
+
+# The settings cannot be read (a config typo): the hourly job must not turn into a
+# silent "nothing to do". A bin/keel that fails stands in for it.
+notices_reset
+printf '#!/bin/sh\necho "ConfigError: [hosts.mac] has no key backup_set" >&2\nexit 1\n' > "$KEEL/bin/keel"
+chmod +x "$KEEL/bin/keel"
+out="$(KEEL_HOME="$KEEL" KEEL_BACKUP_HOME="$BH" NOTICES_PATH="$NOTICES" "$BACKUP" snapshot 2>&1)"; rc=$?
+rm -f "$KEEL/bin/keel"
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a failed keel backup env fails the scheduled run"
+check "$(echo "$out" | grep -c 'could not read the backup settings.*ConfigError')" "1" "and names why"
+check "$(notice open backup-stale)" "yes" "and raises backup-stale rather than going quiet"
+run snapshot >/dev/null
+
+# A run narrowed by --set may not speak for the sets it never opened.
+state_put last_success "2020-01-01T00:00:00Z"
+state_put last_verify "2020-01-01T00:00:00Z"
+notices_reset
+run snapshot --set helm >/dev/null 2>&1
+check "$(state_of last_success)" "2020-01-01T00:00:00Z" "a narrowed snapshot run does not move the run-wide freshness figure"
+check "$(notice open backup-stale)" "yes" "so a genuinely stale backup is still announced after one"
+run verify --set helm >/dev/null 2>&1
+check "$(state_of last_verify)" "2020-01-01T00:00:00Z" "and a narrowed verify does not move the verify clock"
+run snapshot >/dev/null 2>&1
+
+# --- 8j. the keel set, which is the one that matters now ------------------------------
+mkdir -p "$ROOT/restored-keel"
+run restore --into "$ROOT/restored-keel" >/dev/null
+check "$(has "$ROOT/restored-keel/state/board.db")" "yes" "restore defaults to the keel set, and the board is in it"
+check "$(python3 -c 'import sqlite3,sys
+db = sqlite3.connect(sys.argv[1])
+print(db.execute("select count(*) from cards").fetchone()[0])' "$ROOT/restored-keel/state/board.db" 2>/dev/null)" "1" \
+      "and it opens and holds its cards, which a torn copy of a live WAL database would not"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/plan.md")" "yes" "a card directory survives the round trip"
+check "$(has "$ROOT/restored-keel/state/voice/transcript.jsonl")" "yes" "and the voice transcript"
+check "$(has "$ROOT/restored-keel/segments/daybook/data/items.json")" "yes" "and the segment data"
+check "$(has "$ROOT/restored-keel/segments/fathom/data/asks")" "yes" "including an empty drop directory"
+check "$(has "$ROOT/restored-keel/state/human.token")"   "no" "the deck token is a credential and is not in scope"
+check "$(has "$ROOT/restored-keel/state/artifact.key")"  "no" "nor the artifact key"
+check "$(has "$ROOT/restored-keel/state/talker.pid")"    "no" "nor a pid naming a process on this laptop"
+check "$(has "$ROOT/restored-keel/state/voice/cache")"   "no" "nor the regenerable TTS cache"
+check "$(has "$ROOT/restored-keel/state/logs")"          "no" "nor the logs, which are not state"
+check "$(has "$ROOT/restored-keel/state/worktrees")"     "no" "nor a worktree of a repo that has its own history"
+check "$(has "$ROOT/restored-keel/state/fetch-locks")"   "no" "nor a lock nothing would release"
+check "$(has "$ROOT/restored-keel/state/drafts")"        "no" "nor the drafts' scratch media"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/out/node_modules")" "no" "nor a node_modules anywhere"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/scratch")" "no" "nor a card's scratch folder, whole: a checkout, plain copies with no .git, a house's notes"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/plan.md")" "yes" "while the card's own files beside it stay"
+check "$(has "$ROOT/restored-keel/spaces/personal/space-personal.md")" "yes" "the user's own space contract is in the set"
+check "$(has "$ROOT/restored-keel/claude/projects/-home-talker/memory/MEMORY.md")" "yes" "and the install's Claude memory"
+check "$(has "$ROOT/restored-keel/claude/projects/-home-talker/session.jsonl")" "no" "but not its transcripts"
+check "$(git -C "$ROOT" clone -q "$ROOT/restored-keel/repos/memory.bundle" "$ROOT/memory-restored" 2>/dev/null && git -C "$ROOT/memory-restored" log --format=%s -1)" "the memory, committed" "the memory repo's history comes back from its bundle"
+check "$(has "$ROOT/restored-keel/repos/packs.bundle")" "no" "and a repo with no commit has no bundle"
+
+# r2.F6: a bundle that fails says so and the board still lands.
+echo 'a new rule' >> "$KEEL/memory/talker/CLAUDE.md"
+git -C "$KEEL/memory" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m 'moved on'
+mkdir -p "$BH/work/keel/bundles/memory.bundle.part/blocked"     # rm -f cannot clear a directory
+bundled="$(run snapshot 2>&1)"; rc=$?
+check "$rc" "0" "a memory bundle that fails does not fail the snapshot"
+check "$(echo "$bundled" | grep -c 'could not bundle the history of memory/')" "1" "and says so in one line"
+rm -rf "$BH/work/keel/bundles/memory.bundle.part" "$ROOT/restored-keel-2"; mkdir -p "$ROOT/restored-keel-2"
+run restore --into "$ROOT/restored-keel-2" >/dev/null
+check "$(has "$ROOT/restored-keel-2/state/board.db")" "yes" "and the board still lands in that snapshot"
+
+# r3.F1: but the board itself failing to land refuses the snapshot. A tar that fails only on
+# the board's append stands in for a full disk or a torn stage.
+mkdir -p "$ROOT/stub-tar"
+cat > "$ROOT/stub-tar/tar" <<STUB
+#!/usr/bin/env bash
+case " \$* " in *" -rf "*" state/board.db "*) echo "tar: state/board.db: Cannot append" >&2; exit 1 ;; esac
+exec "$(command -v tar)" "\$@"
+STUB
+chmod +x "$ROOT/stub-tar/tar"
+echo 'one more rule' >> "$KEEL/memory/talker/CLAUDE.md"
+boardless="$(PATH="$ROOT/stub-tar:$PATH" run snapshot 2>&1)"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a board that fails to land in the archive refuses the snapshot"
+check "$(echo "$boardless" | grep -c 'could not stage state/board.db into the archive')" "1" "and says which file it could not stage"
+run snapshot >/dev/null 2>&1
+check "$(has "$ROOT/restored-keel/state/cards/c-001/out/scratch/kept.md")" "yes" "while a deeper directory of that name survives"
+check "$(has "$ROOT/restored-keel/memory/bosun/MEMORY.md")" "yes" "the install's memory is in the set, back where it belongs"
+check "$(has "$ROOT/restored-keel/memory/talker/CLAUDE.md")" "yes" "the talker's rulebook with it"
+check "$(has "$ROOT/restored-keel/identity/about-you.md")" "yes" "and the identity profile"
+check "$(has "$ROOT/restored-keel/packs/work/pack.toml")" "yes" "and the install's own packs"
+check "$(has "$ROOT/restored-keel/history/docs/decisions.md")" "yes" "and the history the move carried"
+check "$(has "$ROOT/restored-keel/memory/.git")" "no" "while a repo's .git stays out"
+check "$(has "$ROOT/restored-keel/packs/.git")" "no" "for the packs repo too"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/out/demo.MP4")" "no" "nor a video in a card's out/, whatever its case"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/out/voice.wav")" "no" "nor an audio file"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/out/summary.md")" "yes" "while the card's text outcome survives"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/merged-tests.log")" "no" "nor a landing's test output, which is a log"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/out/merged-tests.log")" "no" "nor one of that name deeper in the set"
+check "$(has "$ROOT/restored-keel/state/cards/c-001/evidence.log")" "yes" "while a card's other log, its evidence, survives"
+check "$(has "$ROOT/restored-keel/state/board.db-wal")"  "no" "nor the WAL"
+check "$(has "$ROOT/restored-keel/pr-reviews")" "no" "a Keel restore delivers no scanner state"
+check "$(has "$ROOT/restored-keel/ledger")"     "no" "nor the old engine's ledger"
+
+python3 - "$KEEL/state/board.db" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("insert into cards values ('c-002', 'another card')")
+db.commit(); db.close()
+PY
+before_keel="$(count "$KSNAP")"
+run snapshot >/dev/null
+check "$([ "$(count "$KSNAP")" -gt "$before_keel" ] && echo yes || echo no)" "yes" \
+      "a card added to the board is a change the content test sees, through the staged copy"
+
+# --- 9. one set, one writer ------------------------------------------------------------
+# The box coming up while the Mac still writes keel. latest.json says the Mac wrote it a
+# minute ago, so the box refuses; at cutover it says --take-over, and then the Mac refuses.
+notices_reset
+python3 - "$KEEL/state/board.db" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("insert into cards values ('c-003', 'a third card')")
+db.commit(); db.close()
+PY
+before_keel="$(count "$KSNAP")"
+out="$(HOST_UNDER_TEST=selftest-box SETS_UNDER_TEST=keel run snapshot)"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a second host writing a set the first still owns is refused"
+check "$(echo "$out" | grep -c 'One set has one writer')" "1" "and it says why, and what to do"
+check "$(count "$KSNAP")" "$before_keel" "and nothing reached the store"
+out="$(HOST_UNDER_TEST=selftest-box SETS_UNDER_TEST=keel run snapshot --take-over)"
+check "$(latest_of keel host)" "selftest-box" "--take-over moves the set, and latest.json says so"
+check "$(count "$KSNAP")" "$((before_keel + 1))" \
+      "the new owner adds to the set's history rather than replacing it"
+python3 - "$KEEL/state/board.db" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("insert into cards values ('c-004', 'a fourth card')")
+db.commit(); db.close()
+PY
+out="$(SETS_UNDER_TEST=keel run snapshot)"
+check "$(echo "$out" | grep -c 'One set has one writer')" "1" "and now the first host is the one refused"
+out="$(SETS_UNDER_TEST=keel run snapshot --take-over)"
+check "$(latest_of keel host)" "$HOST_A" "until it takes the set back"
+out="$(SETS_UNDER_TEST=keel run snapshot --set helm)"
+check "$(echo "$out" | grep -c 'does not write the helm set')" "1" "a host may not write a set its config does not give it"
+
+# --- 10. the nightly pull --------------------------------------------------------------
+notices_reset
+out="$(run pull)"; rc=$?
+check "$rc" "0" "a pull succeeds"
+MIR="$BH/mirror/sets"
+# Per set, the newest snapshot of each of the MIRROR_DAYS (3) most recent days the store holds.
+want=0
+for s in "$SD"/sets/*/snapshots; do
+  n="$(find "$s" -name '*.tar.gz.gpg' -exec basename {} \; | cut -c1-8 | sort -u | wc -l | tr -d ' ')"
+  want=$((want + (n < 3 ? n : 3)))
+done
+check "$(count "$MIR")" "$want" "the mirror holds the newest snapshot of each set's three most recent days"
+check "$(echo "$out" | grep -c 'proven: .*keel')" "1" "and proves the newest keel snapshot by restoring it"
+check "$(echo "$out" | grep -c 'proven: .*helm')" "1" "and the helm set's, with the helm key"
+# The store keeps its full history; the mirror only the recent end, and it must not fetch
+# what it then drops, or every pull would download the history and delete it again.
+for id in 20250101T010000Z 20250102T010000Z; do mk "$id"; done
+run pull >/dev/null
+out="$(run pull)"
+check "$(echo "$out" | grep -c 'pull ok: 0 new object')" "1" \
+      "a second pull fetches nothing, with older history still in the store"
+check "$(count "$MIR/harbor/snapshots/2025/01")" "0" "and the mirror holds none of that older history"
+# The store losing its newest snapshot: a writer gone wrong, a hand in the Drive web page.
+# The mirror keeps it, because its keep set is computed on its own ids as well.
+gone="$(find "$HASNAP" -name '*.tar.gz.gpg' | LC_ALL=C sort | tail -1)"
+rm -f "$gone"
+run pull >/dev/null
+check "$(has "$BH/mirror/${gone#"$SD"/}")" "yes" \
+      "a snapshot the store lost is NOT deleted from the mirror"
+cp -p "$BH/mirror/${gone#"$SD"/}" "$gone"   # put it back from the mirror: what the mirror is for
+out="$(run verify --local)"; rc=$?
+check "$rc" "0" "a local verify reads the mirror"
+state_put last_verify "2020-01-01T00:00:00Z"
+run verify --local >/dev/null 2>&1
+check "$(state_of last_verify)" "2020-01-01T00:00:00Z" "and, proving less than a store verify, moves no clock"
+run verify >/dev/null 2>&1
+
+# An unreadable newest snapshot is raised by the pull on the first night.
+cp "$(newest "$KSNAP")" "$ROOT/good-keel"
+echo 'not a gpg file' > "$(newest "$KSNAP")"
+run pull >/dev/null 2>&1
+check "$(notice open backup-pull-stale)" "yes" "a pulled snapshot that does not read back is raised at once"
+cp "$ROOT/good-keel" "$(newest "$KSNAP")"
+run pull >/dev/null 2>&1
+check "$(notice done backup-pull-stale)" "yes" "and the next good pull retires it"
+
+# A pull job that never runs is caught by the hourly snapshot, which certainly does.
+notices_reset
+state_put last_pull "2020-01-01T00:00:00Z"
+run snapshot >/dev/null 2>&1
+check "$(notice open backup-pull-stale)" "yes" "the hourly job raises a pull that is two nights late"
+run pull >/dev/null 2>&1
+check "$(notice done backup-pull-stale)" "yes" "and a pull retires it"
+
+# --- 10b. the box publishes while the pull runs (c-440) --------------------------------
+# The pull lists the store once, and the box rewrites each set's latest.json every hour. A
+# pull on a laptop that dozes between DarkWakes runs for hours, so the listing's md5 for
+# latest.json was stale by the time it was fetched, and the pull failed on the one file
+# that is the commit point, two nights running. A stand-in box rewrites keel's latest.json
+# (same snapshot, a new counter) as fast as it can for the length of the pull.
+notices_reset
+KLATEST="$SD/sets/keel/latest.json"
+cp "$KLATEST" "$ROOT/latest-keel.json"
+rm -f "$ROOT/rewriter.stop"
+python3 - "$KLATEST" "$ROOT/rewriter.stop" <<'PY' &
+import json, os, sys, time
+path, stop = sys.argv[1], sys.argv[2]
+base, n = json.load(open(path)), 0
+while not os.path.exists(stop):
+    n += 1
+    # `.put-` is the name an interrupted put has, which the file store's listing skips,
+    # so the temporary is never listed as an object: the box's own store_put does this.
+    tmp = os.path.join(os.path.dirname(path), f".put-rewriter-{n}")
+    with open(tmp, "w") as handle:
+        json.dump(dict(base, rewritten=n), handle)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    time.sleep(0.005)
+PY
+rewriter=$!
+out="$(run pull)"; rc=$?
+touch "$ROOT/rewriter.stop"; wait "$rewriter" 2>/dev/null
+check "$rc" "0" "a pull survives the box rewriting latest.json while it runs"
+[ "$rc" = 0 ] || printf '%s\n' "$out" | tail -3
+named="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["snapshot"])' "$BH/mirror/sets/keel/latest.json" 2>/dev/null)"
+check "$(find "$BH/mirror/sets/keel/snapshots" -name "$named.tar.gz.gpg" | wc -l | tr -d ' ')" "1" \
+      "and the mirror's latest.json names a snapshot the mirror holds"
+cp "$ROOT/latest-keel.json" "$KLATEST"
+# A latest.json naming a snapshot nobody holds is not a commit point to accept, whatever
+# its md5: the pull re-lists once, finds nothing new, and fails rather than write it.
+python3 - "$KLATEST" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); d["snapshot"] = "20991231T235959Z"
+json.dump(d, open(sys.argv[1], "w"))
+PY
+cp "$BH/mirror/sets/keel/latest.json" "$ROOT/mirror-latest-keel.json"
+out="$(run pull 2>&1)"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a latest.json naming a snapshot the mirror cannot hold fails the pull"
+check "$(cmp -s "$BH/mirror/sets/keel/latest.json" "$ROOT/mirror-latest-keel.json" && echo kept || echo moved)" "kept" \
+      "and the mirror keeps the commit point it had"
+cp "$ROOT/latest-keel.json" "$KLATEST"
+run pull >/dev/null 2>&1
+
+# THE NOTICE POINTS AT THE LOG THE ERROR IS IN, AND SAYS THE SAME THING EVERY HOUR. The
+# hourly job re-states an open pull notice with --replace, and a brief that carried a
+# relative age ("49h ago", then "50h ago") was a new `kb set` event on the card every hour.
+notices_reset
+state_put last_pull "2020-01-01T00:00:00Z"
+state_put last_pull_error "could not copy sets/keel/latest.json at 2020-01-01T03:00:00Z"
+run snapshot >/dev/null 2>&1
+brief1="$(python3 -c 'import json,sys; print([c["brief"] for c in json.load(open(sys.argv[1])) if c["options"]["notice_key"] == "backup-pull-stale"][0])' "$NOTICES")"
+run snapshot >/dev/null 2>&1
+brief2="$(python3 -c 'import json,sys; print([c["brief"] for c in json.load(open(sys.argv[1])) if c["options"]["notice_key"] == "backup-pull-stale"][0])' "$NOTICES")"
+check "$(echo "$brief1" | grep -c 'pull.err')" "1" "the pull notice names pull.err, where the error is"
+check "$(echo "$brief1" | grep -c 'could not copy sets/keel/latest.json')" "1" "and carries the last error itself"
+check "$([ "$brief1" = "$brief2" ] && echo same || echo changed)" "same" "and an hour later it says exactly the same thing"
+run pull >/dev/null 2>&1
+
+# --- 11. is any of it shared? ----------------------------------------------------------
+notices_reset
+chmod o+r "$(newest "$KSNAP")"
+out="$(run verify)"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a store with a shared object fails the weekly verify"
+check "$(notice open backup-public)" "yes" "and raises backup-public"
+chmod o-r "$(newest "$KSNAP")"
+run verify >/dev/null 2>&1
+check "$(notice done backup-public)" "yes" "which only a verify that saw nothing shared retires"
+
+# --- 12. the move off GitHub ------------------------------------------------------------
+# The old layout, as the GitHub clone holds it: harbor at the root, keel and helm under
+# sets/, every blob under the ONE shared key. Migrated into a fresh store by a fresh
+# machine that holds only the shared key.
+OLD="$ROOT/old-clone"; BH2="$ROOT/backup2"; SD2="$ROOT/store2"
+mkdir -p "$BH2" "$SD2" "$OLD"
+cp "$BH/backup.key" "$BH2/backup.key"
+enc_old() {             # $1 = set dir in the clone, $2 = id, $3 = source root, $4.. = paths
+  local dir="$1" id="$2" src="$3"; shift 3
+  mkdir -p "$dir/snapshots/${id:0:4}/${id:4:2}"
+  ( cd "$src" && tar -cf - "$@" ) | gzip -9nc | gpg --batch --yes --quiet --no-tty --pinentry-mode loopback \
+    --symmetric --cipher-algo AES256 --passphrase-file "$BH/backup.key" \
+    -o "$dir/snapshots/${id:0:4}/${id:4:2}/$id.tar.gz.gpg"
+  printf '{"manifest": "old-%s", "snapshot": "%s"}\n' "$id" "$id" > "$dir/latest.json"
+}
+mkdir -p "$ROOT/oldkeel/state"
+python3 - "$ROOT/oldkeel/state/board.db" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1]); db.execute("create table cards (id text)")
+db.execute("insert into cards values ('c-001')"); db.commit(); db.close()
+PY
+enc_old "$OLD" 20260910T010000Z "$FAKE" segments/fathom/data/index.json
+enc_old "$OLD" 20260911T010000Z "$FAKE" segments/fathom/data/index.json
+enc_old "$OLD/sets/keel" 20260911T020000Z "$ROOT/oldkeel" state/board.db
+enc_old "$OLD/sets/helm" 20260911T030000Z "$HELM" pr-reviews/state.json
+git -C "$OLD" init --quiet -b main && git -C "$OLD" add -A \
+  && git -C "$OLD" -c user.name=t -c user.email=t@t commit --quiet -m old
+mig() { KEEL_HOME="$KEEL" KEEL_HARBOR_HOME="$FAKE" KEEL_HELM_HOME="$HELM" KEEL_BACKUP_HOME="$BH2" \
+        KEEL_BACKUP_STORE="file:$SD2" KEEL_BACKUP_SETS="keel harbor helm" KEEL_BACKUP_HOST="$HOST_A" \
+        NOTICES_PATH="$NOTICES" "$BACKUP" migrate-from-git --clone "$OLD" 2>&1; }
+notices_reset
+out="$(mig)"; rc=$?
+check "$rc" "0" "the migration runs to the end"
+check "$(count "$SD2/sets/harbor/snapshots")" "2" "every Harbor snapshot is in the store, now under sets/harbor/"
+check "$(count "$SD2/sets/keel/snapshots")" "1" "and Keel's"
+check "$(count "$SD2/sets/helm/snapshots")" "1" "and Helm's"
+check "$(echo "$out" | grep -c 'verify ok')" "1" "and the ordinary store verify then reads every set back"
+hblob="$(newest "$SD2/sets/helm/snapshots")"
+check "$(decrypts_with "$BH2/backup-helm.key" "$hblob")" "yes" "the helm snapshots are re-encrypted under the helm key"
+check "$(decrypts_with "$BH2/backup.key" "$hblob")" "no" "and no longer open with the shared one"
+check "$(notice open backup-passphrase-helm)" "yes" "whose new passphrase goes to the password manager"
+check "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["host"])' "$SD2/sets/keel/latest.json")" "$HOST_A" \
+      "latest.json names the host that owns each set from now on"
+out="$(mig)"
+check "$(echo "$out" | grep -c '0 snapshot(s) copied')" "3" "run again, it copies nothing: a run cut short is finished by rerunning it"
+python3 - "$SD2/sets/keel/latest.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); d.update(snapshot="29990101T000000Z", host="selftest-box")
+json.dump(d, open(sys.argv[1], "w"))
+PY
+out="$(mig)"
+check "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["host"])' "$SD2/sets/keel/latest.json")" "selftest-box" \
+      "a rerun after the store moved on does not rewind latest.json or its owner"
+
+# --- 12b. the code set ------------------------------------------------------------------
+# The checkout's own history, as one git bundle (c-288): the repo has no remote, so without
+# it a restore brings back a board with no code to run it. Staged like the board, rebuilt
+# only when a ref moves, and floored at six hours like Helm.
+CSNAP="$SD/sets/code/snapshots"
+gitc() { git -C "$KEEL" -c user.name=selftest -c user.email=selftest@example.invalid "$@"; }
+echo 'print("keel")' > "$KEEL/bin/keel"
+gitc init --quiet -b main && gitc add bin/keel && gitc commit --quiet -m one
+export SETS_UNDER_TEST="keel code harbor helm"
+out="$(run snapshot --set code)"; rc=$?
+check "$rc" "0" "the code set snapshots a checkout"
+check "$(count "$CSNAP")" "1" "into sets/code/, one object"
+check "$(git -C "$KEEL" status --porcelain --ignored | grep -c bundle)" "0" \
+      "and writes nothing into the checkout it bundles"
+out="$(run snapshot --set code)"
+check "$(echo "$out" | grep -c '\[code\] unchanged since')" "1" "an unchanged repo is an unchanged set: the bundle is reused byte for byte"
+mkdir -p "$ROOT/restored-code"
+run restore --set code --into "$ROOT/restored-code" >/dev/null
+check "$(git bundle list-heads "$ROOT/restored-code/code/keel.bundle" 2>/dev/null | grep -c ' refs/heads/main$')" "1" \
+      "restore --set code brings back a bundle holding main"
+git clone --quiet -b main "$ROOT/restored-code/code/keel.bundle" "$ROOT/cloned" 2>/dev/null
+check "$(cat "$ROOT/cloned/bin/keel" 2>/dev/null)" 'print("keel")' "and a checkout cloned from it holds the committed code"
+echo 'print("keel 2")' > "$KEEL/bin/keel"; gitc commit --quiet -am two
+out="$(run snapshot --set code)"
+check "$(echo "$out" | grep -c '\[code\] changed, but the last snapshot is only')" "1" \
+      "a new commit inside the six-hour floor waits"
+out="$(run snapshot --set code --force)"
+check "$(count "$CSNAP")" "2" "and --force takes it"
+out="$(run verify --set code)"; rc=$?
+check "$rc" "0" "the store verify reads the code set back through its canary"
+check "$(grep -c '^| code |' "$SD/README.md")" "1" "and the README names the code set"
+check "$(grep -c "a card's \`scratch/\` folder" "$SD/README.md")" "1" "and says a card's scratch folder is in no keel snapshot"
+unset SETS_UNDER_TEST
+
+# --- 12c. the install's own board (c-622) ------------------------------------------------
+# The scheduled jobs run from the checkout, while an install's board is its config's
+# state_dir (~/shipyard/state). `keel backup env` hands it over as KEEL_BACKUP_STATE_DIR,
+# and the keel set is then the install's home: its state/, config.toml and segment data.
+INST="$ROOT/install"
+mkdir -p "$INST/state/cards/c-900" "$INST/segments/daybook/data"
+python3 - "$INST/state/board.db" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("pragma journal_mode=wal")
+db.execute("create table cards (id text primary key, title text)")
+db.execute("insert into cards values ('c-900', 'the install board')")
+db.commit(); db.close()
+PY
+echo 'the install plan' > "$INST/state/cards/c-900/plan.md"
+echo '[machine]'         > "$INST/config.toml"
+out="$(KEEL_BACKUP_STATE_DIR="$INST/state" SETS_UNDER_TEST=keel run snapshot --set keel --force)"; rc=$?
+check "$rc" "0" "the keel set snapshots the install's state dir, wherever the checkout is"
+mkdir -p "$ROOT/restored-install"
+KEEL_BACKUP_STATE_DIR="$INST/state" SETS_UNDER_TEST=keel run restore --into "$ROOT/restored-install" >/dev/null
+check "$(python3 -c 'import sqlite3,sys
+db = sqlite3.connect(sys.argv[1])
+print(db.execute("select id from cards").fetchone()[0])' "$ROOT/restored-install/state/board.db" 2>/dev/null)" "c-900" \
+      "and the board it brings back is the install's, not the checkout's"
+check "$(has "$ROOT/restored-install/state/cards/c-900/plan.md")" "yes" "with the install's card directories"
+check "$(has "$ROOT/restored-install/config.toml")" "yes" "and the install's own config"
+out="$(KEEL_BACKUP_STATE_DIR="$INST/state" SETS_UNDER_TEST=keel run restore --into "$INST/state/x")"
+check "$(echo "$out" | grep -c 'refusing to restore into')" "1" "a restore into the install's home is refused"
+out="$(KEEL_BACKUP_STATE_DIR="$INST/board" SETS_UNDER_TEST=keel run snapshot --set keel)"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a state dir not named state is refused, not guessed"
+before_keel="$(count "$KSNAP")"
+mkdir -p "$ROOT/boardless/state"
+out="$(KEEL_BACKUP_STATE_DIR="$ROOT/boardless/state" SETS_UNDER_TEST=keel run snapshot --set keel --force)"; rc=$?
+check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "a state dir with no board, on a set with history, is refused"
+check "$(count "$KSNAP")" "$before_keel" "and no board-less snapshot reaches the store"
+SETS_UNDER_TEST=keel run snapshot --set keel --force >/dev/null 2>&1    # the checkout's board newest again
+
+echo
+if [ "$fail" -eq 0 ]; then echo "all $pass checks passed (file store)"; else echo "$fail of $((pass+fail)) checks FAILED (file store)"; fi
+
+# --- 13. the same code through rclone ---------------------------------------------------
+# rclone's own `local` backend, so the rclone half of the store layer (lsjson listings with
+# md5, copyto, deletefile, the exit-3 "no such directory") is exercised for real, offline.
+# The Drive-only parts (the permissions metadata, OAuth) cannot be, and say so: the privacy
+# check answers "unknown" here and must leave backup-public standing.
+if command -v rclone >/dev/null 2>&1; then
+  echo
+  echo "keel-backup-selftest (store: rclone, local backend)"
+  RCONF="$ROOT/rclone.conf"; printf '[selftest]\ntype = local\n' > "$RCONF"
+  STORE="rclone:selftest:$ROOT/rstore"
+  BH="$ROOT/backup3"; mkdir -p "$BH"; cp "$ROOT/backup/backup.key" "$ROOT/backup/backup-helm.key" "$BH/"
+  SD="$ROOT/rstore"; KSNAP="$SD/sets/keel/snapshots"
+  notices_reset
+  out="$(run snapshot)"
+  check "$(echo "$out" | grep -c 'snapshot .* published')" "3" "rclone: the first run publishes every set"
+  check "$(echo "$out" | grep -c 'proven by md5')" "3" "rclone: each proven by the md5 rclone lists"
+  out="$(run snapshot)"
+  check "$(echo "$out" | grep -c 'nothing to publish')" "3" "rclone: an unchanged run publishes nothing"
+  mkdir -p "$ROOT/r-restored"
+  run restore --into "$ROOT/r-restored" >/dev/null
+  check "$(has "$ROOT/r-restored/state/board.db")" "yes" "rclone: a restore from the store brings the board back"
+  notices_reset
+  out="$(run verify)"; rc=$?
+  check "$rc" "0" "rclone: the store verify passes"
+  check "$(echo "$out" | grep -c 'LEFT STANDING')" "1" \
+        "rclone: a store that cannot answer the sharing question is not called private"
+  out="$(run pull)"; rc=$?
+  check "$rc" "0" "rclone: the pull copies and proves the store"
+
+  # A refused token, through a stub rclone that answers everything but listremotes the way
+  # rclone answers when Google has revoked the grant.
+  mkdir -p "$ROOT/stub"
+  cat > "$ROOT/stub/rclone" <<STUB
+#!/usr/bin/env bash
+for a in "\$@"; do [ "\$a" = listremotes ] && exec "$(command -v rclone)" "\$@"; done
+echo 'Failed to create file system: couldn'"'"'t fetch token: oauth2: "invalid_grant" "Token has been expired or revoked."' >&2
+exit 1
+STUB
+  chmod +x "$ROOT/stub/rclone"
+  notices_reset
+  echo '{"n":"r"}' > "$FAKE/segments/fathom/data/state.json"
+  out="$(PATH="$ROOT/stub:$PATH" run snapshot)"; rc=$?
+  check "$([ "$rc" -ne 0 ] && echo yes || echo no)" "yes" "rclone: a refused token fails the run"
+  check "$(notice open backup-auth)" "yes" "and raises backup-auth on the FIRST failure, not after hours of staleness"
+  run snapshot >/dev/null
+  check "$(notice done backup-auth)" "yes" "and the next run that reaches the store retires it"
+  echo
+  if [ "$fail" -eq 0 ]; then echo "all $pass checks passed (both stores)"; else echo "$fail of $((pass+fail)) checks FAILED"; fi
+else
+  echo "(rclone is not installed here, so the rclone pass is skipped)"
+fi
+exit $(( fail > 0 ))

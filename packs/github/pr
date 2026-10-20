@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""`pr <id> [--draft|--body]`: open the card's draft pull requests, or put the record's body on
+them (the kit's `verbs.py`). `--ready` is refused: marking ready is Approve outcome's `publish`."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path[:0] = [str(HERE), os.environ.get("KEEL_HOME") or str(HERE.parent.parent), str(HERE.parent.parent)]
+
+from keel.packkit import verbs  # noqa: E402
+
+sys.exit(verbs.run("pr", sys.argv[1:], pack=HERE, layer="gh_layer"))

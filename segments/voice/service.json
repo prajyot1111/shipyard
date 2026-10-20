@@ -1,0 +1,5 @@
+{
+  "prefix": "/voice/",
+  "port": 4390,
+  "health": "/voice/health"
+}

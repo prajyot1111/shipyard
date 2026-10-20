@@ -1,0 +1,230 @@
+{
+ "generated": "2026-09-04T08:29:02+05:30",
+ "harbor": {
+  "running": true,
+  "session": "harbor",
+  "state": "idle",
+  "link": "https://example.invalid/rc"
+ },
+ "counts": {
+  "running": 4,
+  "rooms": 2,
+  "work": 3,
+  "notices": 5,
+  "alert": {
+   "now": true,
+   "running": false,
+   "rooms": false
+  }
+ },
+ "running": [
+  {
+   "id": "aa11bb22cc33dd44ee55ff6600112233",
+   "name": "kettle: the rebuild",
+   "state": "working",
+   "at": "2026-09-04T08:20:02+05:30",
+   "space": "personal",
+   "room": "kitchen",
+   "tmux": "h-kettle"
+  },
+  {
+   "id": "bb22cc33dd44ee55ff660011223344aa",
+   "name": "room kitchen",
+   "state": "idle",
+   "at": "2026-09-04T06:09:02+05:30",
+   "space": "personal",
+   "room": "kitchen",
+   "tmux": "h-kitchen"
+  },
+  {
+   "id": "cc33dd44ee55ff660011223344aabb11",
+   "name": "lantern: the reader",
+   "state": "blocked",
+   "at": "2026-09-04T07:48:02+05:30",
+   "space": "personal",
+   "room": "",
+   "tmux": "h-lantern"
+  },
+  {
+   "id": "dd44ee55ff660011223344aabb11cc22",
+   "name": "orchard: nightly fetch",
+   "state": "working",
+   "at": "2026-09-04T08:26:02+05:30",
+   "space": "personal",
+   "room": "",
+   "tmux": "h-orchard"
+  }
+ ],
+ "queue": [
+  {
+   "index": 11,
+   "what": "Merge the kettle rebuild",
+   "summary": "Built and green on the kettle branch. One clean fast forward at the desk.",
+   "kind": "approval",
+   "status": "pending",
+   "at": "2026-09-04T05:09:02+05:30",
+   "first_seen": "2026-09-04T05:09:02+05:30",
+   "key": "k11",
+   "folded": false
+  },
+  {
+   "index": 12,
+   "what": "Lantern is parked on a missing font",
+   "summary": "The reader cannot lay out its page until a font is installed, so it stopped rather than guessing.",
+   "kind": "notice",
+   "status": "pending",
+   "at": "2026-09-04T05:29:02+05:30",
+   "first_seen": "2026-09-04T05:29:02+05:30",
+   "key": "k12",
+   "folded": false
+  },
+  {
+   "index": 13,
+   "what": "Orchard found two new feeds",
+   "summary": "Two feeds appeared overnight and neither has been read yet.",
+   "kind": "notice",
+   "status": "pending",
+   "at": "2026-09-04T06:59:02+05:30",
+   "first_seen": "2026-09-04T06:59:02+05:30",
+   "key": "k13",
+   "folded": false
+  },
+  {
+   "index": 14,
+   "what": "Kitchen room is over its budget",
+   "summary": "The kitchen room has spent more sessions than it was opened with.",
+   "kind": "notice",
+   "status": "pending",
+   "at": "2026-09-04T07:29:02+05:30",
+   "first_seen": "2026-09-04T07:29:02+05:30",
+   "key": "k14",
+   "folded": false
+  },
+  {
+   "index": 10,
+   "what": "An older notice nobody cleared",
+   "summary": "Left from last week and still sitting there.",
+   "kind": "notice",
+   "status": "pending",
+   "at": "2026-09-01T13:49:02+05:30",
+   "first_seen": "2026-09-01T13:49:02+05:30",
+   "key": "k10",
+   "folded": true
+  }
+ ],
+ "rooms": [
+  {
+   "key": "kitchen",
+   "goal": "rebuild the kettle and prove it boils",
+   "retired": false,
+   "members": [
+    {
+     "name": "kettle",
+     "state": "working",
+     "ended": false
+    },
+    {
+     "name": "tap",
+     "state": "ended",
+     "ended": true
+    },
+    {
+     "name": "hob",
+     "state": "idle",
+     "ended": false
+    }
+   ]
+  },
+  {
+   "key": "shed",
+   "goal": "a tidy shed",
+   "retired": false,
+   "members": [
+    {
+     "name": "rake",
+     "state": "ended",
+     "ended": true
+    }
+   ]
+  }
+ ],
+ "reviews": [
+  {
+   "key": "r1",
+   "title": "the kettle layout, three shapes",
+   "agent": "kettle"
+  },
+  {
+   "key": "r2",
+   "title": "the reader's type scale",
+   "agent": "lantern"
+  }
+ ],
+ "segments": [
+  {
+   "name": "weather"
+  },
+  {
+   "name": "reading"
+  },
+  {
+   "name": "voice"
+  }
+ ],
+ "work": {
+  "connected": true,
+  "adapter": "the shed board",
+  "conductor": "asleep",
+  "items": [
+   {
+    "kind": "card",
+    "id": "s-101",
+    "title": "the shelf that never got put up",
+    "why": "waiting on a drill"
+   },
+   {
+    "kind": "card",
+    "id": "s-102",
+    "title": "repaint the back door",
+    "why": "queued"
+   },
+   {
+    "kind": "card",
+    "id": "s-103",
+    "title": "clear the gutters",
+    "why": "queued"
+   }
+  ]
+ },
+ "usage": {
+  "available": true,
+  "note": "",
+  "today": {
+   "date": "2026-09-04",
+   "cost": 3.25,
+   "tokens": 812345,
+   "msgs": 6,
+   "today": true
+  },
+  "windows": [
+   {
+    "key": "seven_day",
+    "label": "Weekly",
+    "used": 21,
+    "left": 79
+   }
+  ],
+  "days": [
+   {
+    "date": "2026-09-03",
+    "label": "Thu",
+    "cost": 9.5,
+    "today": false
+   }
+  ]
+ },
+ "briefing": "# Briefing, Friday 04 September 2026, 07:12\n\nStanding context. Read it, hold it, do not summarise it back.\n\n## Running now (4)\n\n- kettle, lantern, orchard and the kitchen room.\n\n## Waiting on you (1)\n\n- The kettle rebuild is staged.\n\n## Overnight (2)\n\n- Two feeds appeared and neither has been read.\n",
+ "queueFoldDays": 3,
+ "generatedAt": "2026-09-04T08:29:02+05:30",
+ "approval": null
+}

@@ -1,0 +1,350 @@
+#!/usr/bin/env bash
+# keel-browser - look at a page the way a browser does, and say what you saw.
+#
+#   keel-browser shot     <url> <out.png> [--full-page]
+#   keel-browser dom      <url>
+#   keel-browser requests <url>           [--seconds N]
+#   keel-browser eval     <url> <js>
+#   keel-browser video    <url> <steps.json> <out.webm>   play a scene; clip, 2x stills, timeline
+#   keel-browser install                  put Playwright and Chromium in this machine's one place
+#   keel-browser check                    launch a browser and close it, and say which half broke
+#
+#   anywhere: [--settle MS] [--timeout S] [--width PX] [--height PX] [--wait-for JS]
+#
+#   --wait-for is a JS expression polled until it is truthy BEFORE anything is measured.
+#   It exits 6, distinctly, if it never becomes true: "the page was never ready" and
+#   "the page is wrong" are different answers and a fixed --settle cannot tell them apart.
+#
+# THE SAME COMMAND LINE AS `~/harbor/bin/harbor-browser`, ON PURPOSE.
+#
+# That script is the Mac's only browser tool and it is not Keel's: it lives outside this
+# repo, it drives the Google Chrome installed on the Mac, and the box has neither. Yet the
+# house contract and the Atlas both tell a house to render what it changed, so the first
+# house that built on the box (c-310, 2026-09-20) had to hand-build a browser inside its own
+# worktree: Playwright's Chromium, eight shared libraries fetched with `apt-get download`
+# into a local sysroot behind LD_LIBRARY_PATH, DejaVu behind a local FONTCONFIG_FILE, about
+# 230 MB, thrown away with the worktree. This file is that work done once, in Keel, with the
+# same arguments and the same exit codes, so anything already written against harbor-browser
+# runs here unchanged. On the Mac harbor-browser keeps working for everything outside Keel.
+#
+# THE SAFETY PROPERTIES ARE THE POINT, AND THEY ARE HARBOR'S, KEPT WORD FOR WORD.
+#
+# 1. A FRESH CONTEXT EVERY RUN. Playwright launches with no profile, no cookies, no saved
+#    session, no extension. Keel can LOOK at a page; Keel cannot BE him on one, so
+#    anything behind a login is invisible to it. That is what makes an unattended tool
+#    running under `--permission-mode auto` safe to hand to a house, and it is why the
+#    Claude in Chrome extension (which drives the real, logged-in Chrome) is denied by name
+#    in the install's config.toml as `mcp__claude-in-chrome` and is not a substitute for this.
+# 2. THE BROWSER IS TORN DOWN ON EVERY EXIT PATH. harbor-browser exists because a session
+#    that reached for another browser tool leaked 7.1GB across 57 Chrome processes and took
+#    this Mac's swap to 17 of 18 GB, killing two other sessions. The engine closes the
+#    browser in every catch, in its own watchdog and on EPIPE; this wrapper adds a second
+#    net the engine cannot provide for itself (below).
+#
+# THE HARD TIMEOUT, WHICH HARBOR DOES NOT HAVE AND THE BOX NEEDS.
+#
+# The engine's watchdog is a timer inside the node process: it covers a slow page, and it
+# does not cover node itself wedging, being stopped, or losing its own event loop. On this
+# Mac that is a bad afternoon. On the box it is worse: 12 GB, two cores, and the voice
+# gateway's latency is measured in the same memory a leaked Chromium would be eating. So the
+# engine runs in ITS OWN PROCESS GROUP (`set -m`) and a watchdog here kills the whole group,
+# not just the leader, a slack over the engine's own budget. Killing the leader alone is what
+# leaves the Chromium children behind, which is the exact shape of the leak above.
+#
+# THE INSTALL IS IN ONE KEEL-OWNED PLACE PER MACHINE: ~/.keel-browser (KEEL_BROWSER_HOME).
+#
+# Not in a worktree, because a worktree is reaped and the next house would download 230 MB
+# again. Not under `state/`, because `state/` is backed up nightly and a browser is 400 MB of
+# regenerable bytes that would be in every snapshot forever. Not borrowed from another
+# project's directory (`~/.claude/tools/wt-shot-pw`, `~/harbor/.node`), for the reason
+# bin/harbor-node gives about owning its own copy: a check that imports what another project
+# owns stops working the day that project moves. The engine is found beside THIS script, not
+# through KEEL_BROWSER_HOME, so a fix on a branch is exercised by that branch's wrapper.
+set -uo pipefail
+
+KEEL_BROWSER_HOME="${KEEL_BROWSER_HOME:-$HOME/.keel-browser}"
+PLAYWRIGHT_VERSION=1.63.0            # pinned; keel/browser.py holds the same pin
+MODULES="$KEEL_BROWSER_HOME/node_modules"
+BROWSERS="$KEEL_BROWSER_HOME/browsers"     # PLAYWRIGHT_BROWSERS_PATH; chromium only
+ENGINE="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/keel-browser.js"
+# How long past the engine's own budget the group killer waits. Long enough that a page
+# genuinely finishing at its budget is never cut off, short enough that a wedged node is not
+# a tenth of the box's memory for the rest of the day.
+HARD_SLACK_S="${KEEL_BROWSER_HARD_SLACK_S:-30}"
+# How long the group killer waits between its TERM and its KILL. Tests shorten it, since a
+# fake that ignores TERM otherwise costs the whole of it on every run.
+HARD_GRACE_S="${KEEL_BROWSER_HARD_GRACE_S:-5}"
+
+# Exit codes, the engine's and this wrapper's together. 6 and 5 are the two a caller reads:
+#   0 ok   1 unknown command   2 usage, or the browser would not launch
+#   3 the page failed   4 a screenshot wrote no file   5 gave up (nothing was measured)
+#   6 --wait-for never became true   7 no browser install on this machine
+NO_INSTALL=7
+
+usage() {
+  # The range must cover every signature line AND the shared-options line below them.
+  sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-2}"
+}
+
+# PATH FIRST, then the places node is on the two machines. Harbor's version of this tries
+# the absolute paths first, which is right for a launchd job with a bare PATH and wrong
+# here: a house is given a PATH on purpose (`config.house_path`), and a test standing a fake
+# node in front of this one has no other way to be heard. The absolute candidates are still
+# there for a unit or a cron line whose PATH has neither.
+node_bin() {
+  local c
+  for c in node "$HOME/.local/bin/node" /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+    command -v "$c" >/dev/null 2>&1 && { command -v "$c"; return 0; }
+  done
+  return 1
+}
+
+# The cheap question: can node resolve the module, and is there a browser build to launch.
+# It never launches anything, because every real run launches one a moment later anyway and
+# paying a browser start to answer a question about a directory is the wrong trade (the
+# lesson bin/harbor-node records about its own `path`).
+resolvable() {
+  local node
+  node="$(node_bin)" || return 1
+  [ -d "$MODULES/playwright-core" ] || return 1
+  compgen -G "$BROWSERS/chromium*/" >/dev/null || return 1
+  NODE_PATH="$MODULES" "$node" -e 'require.resolve("playwright-core")' >/dev/null 2>&1
+}
+
+# It has to RUN, not merely resolve: the files can all be present while a shared library
+# Chromium needs is not (on Linux, the system libraries Playwright's install-deps lists).
+# Keeps the error so a failure can say WHICH half broke.
+why_not() {
+  local node
+  node="$(node_bin)" || { echo "no node on PATH"; return; }
+  if [ ! -d "$MODULES/playwright-core" ]; then
+    echo "playwright-core is not installed under $MODULES"; return
+  fi
+  if ! compgen -G "$BROWSERS/chromium*/" >/dev/null; then
+    echo "no chromium build under $BROWSERS"; return
+  fi
+  NODE_PATH="$MODULES" PLAYWRIGHT_BROWSERS_PATH="$BROWSERS" "$node" -e '
+    const { chromium } = require("playwright-core");
+    (async () => {
+      const b = await chromium.launch({ channel: "chromium", headless: true });
+      await b.close();
+    })().then(() => process.exit(0), (e) => {
+      process.stderr.write(String((e && e.message) || e).split("\n")[0] + "\n");
+      process.exit(1);
+    });
+  ' 2>&1 | head -3
+}
+
+works() { [ -z "$(why_not)" ]; }
+
+# A missing install says the one command that fixes it and exits with its own code, rather
+# than letting node throw MODULE_NOT_FOUND at a house that would then try to build its own.
+missing_install() {
+  local self; self="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
+  {
+    echo "keel-browser: no browser install at $KEEL_BROWSER_HOME"
+    echo "  Run: $self install"
+    echo "  (on Linux Chromium also needs its system libraries and fonts, which this does not install)"
+  } >&2
+  exit "$NO_INSTALL"
+}
+
+cmd_install() {
+  local node npm
+  node="$(node_bin)" || { echo "keel-browser: no node on PATH, so nothing here can run" >&2; exit 2; }
+  npm="$(command -v npm)" || { echo "keel-browser: no npm on PATH" >&2; exit 2; }
+  mkdir -p "$KEEL_BROWSER_HOME" || exit 2
+  # Written here rather than kept in the repo: the pin above is the single definition, and an
+  # install must not be able to edit the thing it installs from.
+  cat > "$KEEL_BROWSER_HOME/package.json" <<JSON
+{
+  "name": "keel-browser",
+  "private": true,
+  "description": "Written by bin/keel-browser install. Keel's own Playwright, pinned there.",
+  "dependencies": { "playwright-core": "$PLAYWRIGHT_VERSION" }
+}
+JSON
+  # playwright-core, not playwright, and the browser download switched off during npm: the
+  # package's own postinstall fetches chromium AND firefox AND webkit, about a gigabyte, and
+  # this host wants one of them. The chromium build then comes from the cli below, into
+  # PLAYWRIGHT_BROWSERS_PATH, so nothing lands in ~/.cache where nothing here owns it.
+  ( cd "$KEEL_BROWSER_HOME" \
+      && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+         "$npm" install --no-audit --no-fund --loglevel=error ) || {
+    echo "keel-browser: npm install failed" >&2; exit 2; }
+  # --no-shell: `install chromium` also fetches chromium-headless-shell, which unpacks to
+  # 266 MB on top of Chromium's 393 MB. The shell is the OLD headless build; `launch({
+  # headless: true })` without a channel runs the full browser in new headless mode, which
+  # is the one that paints what a real Chrome paints. Verifying a CSS change against a
+  # renderer that is not the renderer is worth less than the 266 MB it costs.
+  PLAYWRIGHT_BROWSERS_PATH="$BROWSERS" \
+    "$node" "$MODULES/playwright-core/cli.js" install --no-shell chromium || {
+    echo "keel-browser: the chromium download failed" >&2; exit 2; }
+  local why; why="$(why_not)"
+  if [ -n "$why" ]; then
+    echo "keel-browser: installed, but a browser still will not launch:" >&2
+    sed 's/^/  /' >&2 <<<"$why"
+    echo "  A missing shared library there is a system package Chromium needs (on Linux," >&2
+    echo "    sudo npx playwright install-deps chromium names and installs them)" >&2
+    exit 2
+  fi
+  echo "keel-browser: ready at $KEEL_BROWSER_HOME"
+  echo "  playwright-core $PLAYWRIGHT_VERSION, chromium only, $(du -sh "$KEEL_BROWSER_HOME" 2>/dev/null | cut -f1) on disk"
+}
+
+cmd_check() {
+  local why; why="$(why_not)"
+  if [ -z "$why" ]; then
+    echo "ok: $KEEL_BROWSER_HOME, and chromium launches"
+    exit 0
+  fi
+  echo "FAIL: $(head -1 <<<"$why")"
+  echo "      Run: $(dirname "$0")/keel-browser install"
+  exit 1
+}
+
+CMD="${1:-}"
+case "$CMD" in
+  shot|dom|requests|eval|video) ;;
+  install) cmd_install; exit 0 ;;
+  check) cmd_check ;;
+  ""|-h|--help|help) usage 0 ;;
+  *) echo "keel-browser: unknown command: $CMD" >&2; usage 2 ;;
+esac
+shift
+
+URL="${1:-}"
+[ -n "$URL" ] || { echo "keel-browser: $CMD needs a url" >&2; usage 2; }
+shift
+
+# The second positional, where the command takes one. Read before the flags so that a
+# missing one is reported as what it is rather than as an unknown flag.
+EXTRA=""
+EXTRA2=""
+case "$CMD" in
+  shot)
+    EXTRA="${1:-}"
+    [ -n "$EXTRA" ] || { echo "keel-browser: shot needs an output path" >&2; exit 2; }
+    case "$EXTRA" in -*) echo "keel-browser: shot needs an output path, got the flag $EXTRA" >&2; exit 2 ;; esac
+    shift ;;
+  eval)
+    EXTRA="${1:-}"
+    [ -n "$EXTRA" ] || { echo "keel-browser: eval needs an expression" >&2; exit 2; }
+    shift ;;
+  video)
+    # The steps file is read by the engine, which checks every step before a browser starts
+    # (bin/keel-browser-steps.js); here it only has to exist. Beside the clip it writes
+    # <out>.stills/ and <out>.timeline.json, named from the clip so a take is one stem.
+    EXTRA="${1:-}"; EXTRA2="${2:-}"
+    [ -n "$EXTRA" ] && [ -n "$EXTRA2" ] || { echo "keel-browser: video needs a steps file and an output .webm" >&2; exit 2; }
+    [ -f "$EXTRA" ] || { echo "keel-browser: no steps file at $EXTRA" >&2; exit 2; }
+    case "$EXTRA2" in *.webm) ;; *) echo "keel-browser: video writes a .webm, got $EXTRA2" >&2; exit 2 ;; esac
+    shift 2 ;;
+esac
+
+export HB_SETTLE_MS="${HB_SETTLE_MS:-3000}"
+# A scene is minutes of steps, not one page load, so a video's default budget is longer.
+if [ "$CMD" = video ]; then export HB_TIMEOUT_S="${HB_TIMEOUT_S:-600}"; else export HB_TIMEOUT_S="${HB_TIMEOUT_S:-60}"; fi
+export HB_SECONDS="${HB_SECONDS:-30}"
+export HB_FULL_PAGE=0
+export HB_WAIT_FOR="${HB_WAIT_FOR:-}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --full-page) HB_FULL_PAGE=1; shift ;;
+    --settle)  HB_SETTLE_MS="${2:?--settle needs milliseconds}"; shift 2 ;;
+    --timeout) HB_TIMEOUT_S="${2:?--timeout needs seconds}"; shift 2 ;;
+    --seconds) HB_SECONDS="${2:?--seconds needs a number}"; shift 2 ;;
+    --width)   HB_WIDTH="${2:?--width needs pixels}"; export HB_WIDTH; shift 2 ;;
+    --height)  HB_HEIGHT="${2:?--height needs pixels}"; export HB_HEIGHT; shift 2 ;;
+    # Not number-checked below, because it is an expression rather than a measurement.
+    --wait-for) HB_WAIT_FOR="${2:?--wait-for needs a JS expression}"; shift 2 ;;
+    *) echo "keel-browser: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+# Numbers, not whatever was typed. Left as strings these reach the engine's parseInt and
+# quietly become the default, so `--timeout abc` would look like it had been honoured.
+for pair in "--settle:$HB_SETTLE_MS" "--timeout:$HB_TIMEOUT_S" "--seconds:$HB_SECONDS" \
+            "--width:${HB_WIDTH:-1600}" "--height:${HB_HEIGHT:-1000}"; do
+  flag="${pair%%:*}"; val="${pair#*:}"
+  case "$val" in
+    ''|*[!0-9]*) echo "keel-browser: $flag must be a whole number, got '$val'" >&2; exit 2 ;;
+  esac
+done
+
+[ -f "$ENGINE" ] || { echo "keel-browser: missing engine at $ENGINE" >&2; exit 2; }
+resolvable || missing_install
+NODE="$(node_bin)" || { echo "keel-browser: no node on PATH" >&2; exit 2; }
+
+# ── the run, and the second net around it ──────────────────────────────────
+#
+# TEARDOWN ON EVERY EXIT PATH INCLUDES THIS SHELL'S OWN. The engine cannot close a browser
+# after the shell around it is killed, so the trap fires on INT, TERM and HUP as well as
+# EXIT, and it kills the GROUP: `kill -TERM $pid` reaches node and leaves its Chromium
+# children parented to init, which is the leak, not the fix. The kill is unconditional
+# rather than guarded on "is the leader still alive", because the leader exiting cleanly is
+# exactly the case where a stray child would otherwise go unnoticed; on a clean run the
+# group is already empty and both signals are no-ops.
+ENGINE_PID=""
+WATCHDOG_PID=""
+# A directory rather than a file, and made with an explicit template, because `mktemp` with
+# no argument is a usage error on macOS and `mktemp -t NAME` is one on GNU.
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/keel-browser.XXXXXX")" || exit 2
+
+cleanup() {
+  # THE WATCHDOG IS KILLED AS A GROUP TOO, and that is not tidiness. It is a subshell whose
+  # body is `sleep`, so killing the subshell alone leaves the sleep running with the
+  # caller's stdout still open: `keel-browser dom <url> | cat` would then sit for the whole
+  # hard budget after the page was already printed, because the pipe never reaches EOF.
+  # Caught by tests/test_browser.py, whose own reads timed out on a run that had finished.
+  [ -n "$WATCHDOG_PID" ] && { kill -TERM "-$WATCHDOG_PID" 2>/dev/null || kill "$WATCHDOG_PID" 2>/dev/null; }
+  if [ -n "$ENGINE_PID" ]; then
+    kill -TERM "-$ENGINE_PID" 2>/dev/null
+    local i
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      kill -0 "-$ENGINE_PID" 2>/dev/null || break
+      sleep 0.2
+    done
+    kill -KILL "-$ENGINE_PID" 2>/dev/null
+  fi
+  rm -rf "$RUN_DIR"
+}
+trap cleanup EXIT INT TERM HUP
+
+HARD_TIMEOUT_S=$(( HB_TIMEOUT_S + HARD_SLACK_S ))
+
+# `set -m` is what gives each background job its own process group, which is what makes the
+# two group kills above possible at all. The watchdog's own output goes nowhere, so that a
+# caller reading this tool's stdout to EOF is never waiting on the watchdog's `sleep`.
+set -m
+env NODE_PATH="$MODULES" PLAYWRIGHT_BROWSERS_PATH="$BROWSERS" \
+    "$NODE" "$ENGINE" "$CMD" "$URL" "$EXTRA" "$EXTRA2" &
+ENGINE_PID=$!
+
+(
+  sleep "$HARD_TIMEOUT_S"
+  kill -0 "-$ENGINE_PID" 2>/dev/null || exit 0
+  : > "$RUN_DIR/fired"
+  kill -TERM "-$ENGINE_PID" 2>/dev/null
+  sleep "$HARD_GRACE_S"
+  kill -KILL "-$ENGINE_PID" 2>/dev/null
+) >/dev/null 2>&1 </dev/null &
+WATCHDOG_PID=$!
+set +m
+
+# The shell's own stderr only. `set -m` makes the engine a job, and bash announces a job
+# that dies from a signal ("Killed: 9  env NODE_PATH=..."), which is bash talking about its
+# bookkeeping in the middle of a tool's output. The engine's own stderr was inherited when
+# it was forked and is untouched by this; the messages below say what happened in Keel's
+# words instead.
+{ wait "$ENGINE_PID"; CODE=$?; } 2>/dev/null
+
+if [ -e "$RUN_DIR/fired" ]; then
+  echo "keel-browser: killed the browser's whole process group after ${HARD_TIMEOUT_S}s on $URL." >&2
+  echo "  The engine's own ${HB_TIMEOUT_S}s budget did not end it, so node itself was stuck." >&2
+  echo "  Nothing was measured: do not read this run as a verdict on the page." >&2
+  CODE=5
+fi
+exit "$CODE"

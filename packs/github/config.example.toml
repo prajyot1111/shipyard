@@ -1,0 +1,10 @@
+# A space on the GitHub pack, as the install's config.toml writes it. Turning the pack on
+# from the deck's Setup view adds this table under the name you give, with `config_dir` set
+# to the install's own; its repos are cloned one at a time after, each from a github.com
+# address.
+
+[spaces.work]
+pack = "github"
+config_dir = "~/.claude"
+# remote = "origin"            # the git remote the repos fetch from and push to
+# branch = "shipyard/{id}-{slug}"  # how a card's branch is named

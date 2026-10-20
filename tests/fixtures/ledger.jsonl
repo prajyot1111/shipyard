@@ -1,0 +1,13 @@
+{"at": "2026-07-08T12:33:04", "verb": "card.create", "card": "c-001", "space": "work", "by": "import", "fields": {"title": "first work card", "kind": "chore", "ends_in": "code", "needs": [], "description": "Integrate the thing.", "lane": ""}}
+{"at": "2026-09-07T19:04:31+05:30", "verb": "card.set", "card": "c-001", "fields": {"stage": "checking"}, "by": "import"}
+{"at": "2026-09-07T19:04:32+05:30", "verb": "card.set", "card": "c-001", "fields": {"archived": false, "attempts": 0, "autonomy": "attended", "blocked_reason": "needs a human", "branch": "feature/st-1/first", "plan_ref": "/tmp/plans/first.html", "pr": null, "repo": "alpha,beta", "tracker_mode": "create at task start", "tracker_ref": "st-1", "worktree": "/tmp/wt/first", "idle_polls": 3}, "by": "import"}
+{"at": "2026-07-09T20:13:50", "verb": "card.note", "card": "c-001", "by": "", "text": "first note"}
+{"at": "2026-07-10T08:00:00", "verb": "card.note", "card": "c-001", "by": "mac", "text": "second note"}
+{"at": "2026-07-08T12:53:45", "verb": "card.create", "card": "c-002", "space": "work", "by": "import", "fields": {"title": "raise a pull request", "kind": "chore", "ends_in": "code", "needs": [], "description": "Raise it.", "lane": ""}}
+{"at": "2026-09-07T19:04:31+05:30", "verb": "card.set", "card": "c-002", "fields": {"stage": "done", "done_at": "2026-09-07T19:04:31+05:30"}, "by": "import"}
+{"at": "2026-09-07T19:04:31+05:30", "verb": "card.set", "card": "c-002", "fields": {"archived": true, "autonomy": "autonomous", "pr": "4034", "output_ref": "/tmp/out.html", "repo": "alpha", "tracker_mode": "none", "worktree": null}, "by": "import"}
+{"at": "2026-07-11T10:00:00", "verb": "card.create", "card": "c-003", "space": "personal", "by": "import", "fields": {"title": "stageless personal card", "kind": "chore", "ends_in": "research", "needs": [], "description": "No stage was ever set."}}
+{"at": "2026-07-11T10:00:01", "verb": "card.set", "card": "c-003", "fields": {"archived": true, "model": "opus", "plan_style": "light", "include_tests": "False"}, "by": "import"}
+{"at": "2026-07-12T10:00:00", "verb": "card.create", "card": "c-004", "space": "personal", "by": "import", "fields": {"title": "live personal card", "autonomy": "attended", "repo": "harbor", "description": "Still running."}}
+{"at": "2026-07-12T10:00:00", "verb": "card.create", "card": "c-004", "space": "personal", "by": "import", "fields": {"title": "live personal card", "autonomy": "attended", "repo": "harbor", "description": "Still running."}}
+{"at": "2026-07-12T11:00:00", "verb": "card.set", "card": "c-004", "fields": {"stage": "building", "session_id": "e849e3c7-090e-4c16-a56d-fa36b2c8f572", "guidance": "keep it small"}, "by": "session"}

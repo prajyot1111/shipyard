@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""The house guard: the PreToolUse(Bash) hook every house runs under (c-534).
+
+It refuses one shape: a `while` or `until` loop that polls `pgrep -f`. The loop's own shell
+carries the pattern in its command line, so `pgrep -f` always finds at least that shell and
+the loop never ends. c-526's house ran its final suite behind
+`while pgrep -f tests.parallel; do sleep 5; done`, idled for thirty minutes, and the shell
+outlived `claude stop` until it was killed by hand. It is the same trap as `pkill -f`
+(`talker/memory/never-pattern-kill.md`): a pattern matches the command line that says it.
+
+A plain `pgrep -f <pattern>` to LOOK is allowed, which is what `CLAUDE.md` asks a house to
+do before it kills a pid it can name. Only the loop is refused, and the refusal says what
+to do instead.
+
+Second (c-600), with the card id as its argument: a PUSH while the card is at `shipping`.
+The build house lives on after his Approve and answers review there, and only his Ship
+pushes its commits and posts its replies. So `git push` (any form the pattern sees), the
+adapter's `pr` and its `publish` are refused while the board says the card is at shipping.
+The stage is read LIVE (`kb show`), and only for a command of that shape, because the
+session's permissions were fixed when it started, at building, where it had to push.
+A board that cannot be read refuses the push too (it is retried in a moment), which is the
+one place this hook fails closed.
+
+Third (c-641), on any stage: a push to a SHARED branch of the card's space flow (every branch
+whose kind is not `card` or `work`: its base, an environment, the trunk; `keel/flowfence.py`
+reads the command's destinations in the session's cwd, and a push it cannot read counts as
+every branch). Only a move he makes pushes one, and then through `kb flowpush`, which pushes
+only while his tap's grant names the branch. The stage and the shared branches come from one
+`kb flowinfo`, judged where the board lives, so a house on the other machine is fenced by the
+flow that granted its move.
+
+Fourth (c-689), for a card whose space pack ships a `guard` verb: the pack reads the command.
+`house.hooks_for` names the verb's path and the pack's tools after the card id, and this
+hook runs `<guard> <card>` with `{"command", "cwd"}` as JSON on stdin, as every pack verb is
+run. The pack answers `{"allow": true}` or `{"allow": false, "why": <one sentence>}`, and
+the sentence is the refusal (an `allow: false` with no sentence is still a refusal). A pack
+with no `guard` verb is named nowhere, and nothing changes for its houses.
+
+THE ORDER: first the `pgrep -f` loop, then the pack's guard, then the hook's two push checks
+(shipping, a shared branch), which hold whatever the pack allowed. So a push the pack
+refuses is answered with the pack's sentence, at any stage.
+
+ONE CLOCK: the harness stops this hook at twenty seconds (`house.hooks_for`), and a hook it
+stops refuses nothing. So `main` takes one deadline, `BUDGET_SECONDS` from its start: the
+pack's guard gets `PACK_SECONDS` of it at most, flowfence's git reads and `kb flowinfo`
+share what is left, and a push check the budget cannot finish reads as unread, which is
+refused. The refusal lands before the harness gives up.
+
+Contract: the PreToolUse JSON on stdin; exit 0 to allow, exit 2 with the reason on stderr to
+refuse (Claude Code feeds that line back into the session). It FAILS OPEN on its own
+internal error, as the machine-wide guard does, because it guards a full tool set: a broken
+hook would otherwise brick every Bash call a house makes. `bin/keel-board-fence` fails
+closed for the opposite reason. A PACK GUARD THAT FAILS (it errors, answers something else,
+or gives no answer in `PACK_SECONDS`) is in between: a command that names one of the pack's
+tools as a word (`gh`) is refused, since that is what the guard is there to read, and
+every other command is allowed, so a broken pack never bricks a house's shell. A guard
+that gave no answer in time says to try again; one that is missing or broken says so and
+names itself, since waiting will not mend it.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+# A loop keyword as a shell word, not inside another word ("meanwhile").
+LOOP = re.compile(r"(?<![\w-])(while|until)(?![\w-])")
+# `pgrep` (by any path) with a `-f` in a short flag group (`-f`, `-af`, `-fl`) or `--full`,
+# inside the same simple command: nothing between them ends it (`;`, `&`, `|`, newline).
+PGREP_FULL = re.compile(r"(?<![\w-])(?:\S*/)?pgrep(?![\w-])[^;&|\n]*?\s(?:-[a-zA-Z]*f[a-zA-Z]*|--full)(?![\w-])")
+
+REFUSAL = ("a wait loop on `pgrep -f` never ends: the loop's own shell carries the pattern, "
+           "so pgrep always finds it (c-526 waited thirty minutes on exactly this). Run the "
+           "suite in the foreground (`make test`, Bash timeout up to 600000 ms), or start it "
+           "with run_in_background and wait for its completion notice, or wait on a pid you "
+           "can name: `while kill -0 <pid> 2>/dev/null; do sleep 5; done`.")
+
+
+# `git` as a word, then `push` as a word in the same simple command (`git -C x push`, `git
+# push -u`); or the adapter's own publishing verbs by path (`packs/<name>/`, or the
+# `adapters/<name>` link that keeps the old path, c-617).
+# c-600 review: also git's argv spelled out for a subprocess (`["git", "push"`, with `-C x`
+# between), and the adapter's code host module driven by hand. The adapter's own verbs refuse
+# at shipping outside his Ship (`fence.refuse_unless_shipping_tap`); this is the belt.
+PUSH = re.compile(r"(?<![\w-])git(?![\w-])[^;&|\n]*?\spush(?![\w-])"
+                  r"|(?:adapters|packs)/[\w.-]+/(?:pr|publish)(?![\w./-])"
+                  r"""|["']git["']\s*,\s*(?:["'][^"']*["']\s*,\s*)*?["']push["']"""
+                  r"|(?<![\w-])codehost(?![\w-])")
+SHIPPING = ("{card} is at shipping: only the user's Ship pushes your commits, marks the pull request "
+            "ready and posts replies. Commit, run `keel check {card}`, record `kb verdict`, and end "
+            "your turn.")
+UNREAD = ("{card}'s stage could not be read ({why}), so this push is held: pushing is refused "
+          "while a card is at shipping. Try again in a moment.")
+UNREAD_FLOW = ("{card}'s flow could not be read ({why}), so this push is held: a push to a shared "
+               "branch of the flow is refused. Try again in a moment.")
+KB = Path(__file__).resolve().parent / "kb"
+KB_SECONDS = 15
+# The whole hook's clock, under the harness's twenty seconds (`house.hooks_for`), leaving
+# room for this interpreter to start and exit. The pack's guard is asked on every Bash call
+# and takes `PACK_SECONDS` of it at most; a push check gets what is left.
+BUDGET_SECONDS = 17
+PACK_SECONDS = 4
+GIT_READ_SECONDS = 30       # flowfence's own clock for one git read, when there is no deadline
+PACK_SLOW = ("this command names `{tool}`, and the check that reads `{tool}` commands could not be "
+             "checked just now ({why}), so it is held. Try again in a moment.")
+PACK_DOWN = ("this command names `{tool}`, and the pack's guard that reads `{tool}` commands is broken "
+             "({guard}: {why}), so it is held until the guard is mended. Waiting will not mend it: "
+             "note it on the card for the owner.")
+PACK_SILENT = "the pack's guard ({guard}) refused this command and gave no reason."
+
+
+def left(until: float | None, most: float) -> float:
+    """What a part of the hook may spend: `most`, or less when the deadline is nearer."""
+    return most if until is None else max(0.0, min(most, until - time.monotonic()))
+
+
+def pack_refusal(pack, card: str, command: str, cwd, seconds: float = PACK_SECONDS) -> str | None:
+    """What the space pack's `guard` verb says of this command: its sentence, or None.
+    `pack` is the verb's path and then the pack's tools, as the hook was started with."""
+    guard, tools = pack[0], pack[1:]
+    env = dict(os.environ, KEEL_HOME=os.environ.get("KEEL_HOME") or str(ROOT))
+    env["PATH"] = f"{ROOT / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+    answer, slow = None, False
+    try:
+        if seconds <= 0:
+            raise subprocess.TimeoutExpired(guard, seconds)
+        done = subprocess.run([guard, card], input=json.dumps({"command": command, "cwd": cwd}),
+                              capture_output=True, text=True, timeout=seconds, env=env)
+        answer = json.loads(done.stdout) if done.returncode == 0 else None
+        why = f"it exited {done.returncode}" if done.returncode else "its answer was not an allow or a refusal"
+    except subprocess.TimeoutExpired:
+        slow, why = True, f"no answer in {seconds:g} seconds"
+    except (OSError, ValueError) as error:
+        why = f"{type(error).__name__}"
+    if isinstance(answer, dict) and answer.get("allow") is True:
+        return None
+    if isinstance(answer, dict) and answer.get("allow") is False:
+        return " ".join(str(answer.get("why") or "").split()) or PACK_SILENT.format(guard=guard)
+    for tool in tools:
+        if re.search(rf"(?<![\w-]){re.escape(tool)}(?![\w-])", command):
+            return (PACK_SLOW if slow else PACK_DOWN).format(tool=tool, why=why, guard=guard)
+    return None
+
+
+def card_of(card: str, seconds: float = KB_SECONDS) -> dict:
+    """The card's stage and flow facts from the board, now (`kb flowinfo`); raises when the
+    board cannot say, or when the hook has no time left to ask it."""
+    if seconds <= 0:
+        raise RuntimeError("the guard's clock ran out before the board was asked")
+    done = subprocess.run([str(KB), "flowinfo", card, "--json"], capture_output=True, text=True,
+                          timeout=seconds)
+    if done.returncode != 0:
+        raise RuntimeError((done.stderr.strip() or "kb flowinfo failed").splitlines()[-1])
+    return json.loads(done.stdout)
+
+
+def shared_refusal(found: dict, command: str, cwd, names=None, timeout=GIT_READ_SECONDS) -> str | None:
+    """A push to a shared branch of the card's flow (c-641)."""
+    from keel import flowfence                   # noqa: PLC0415 - only a push reads the flow
+    return flowfence.refusal(found, command, cwd, names, timeout)
+
+
+def pushes_of(command: str, cwd, timeout=GIT_READ_SECONDS) -> set:
+    """What the command pushes (`flowfence.targets`), read before the board is asked, so a
+    command that pushes nothing never waits on it; every branch when it cannot be read.
+    `timeout`: each git read's clock, what is left of the hook's own when it has a deadline."""
+    from keel import flowfence                   # noqa: PLC0415
+    try:
+        return flowfence.targets(command, cwd, timeout=timeout)
+    except Exception:  # noqa: BLE001 - an unread command that names git and push is a push
+        return {flowfence.EVERY} if PUSH.search(command) else set()
+
+
+def problem(command: str, card: str | None = None, cwd: str | None = None, pack=(),
+            until: float | None = None) -> str | None:
+    """Why this command is refused, or None when it may run. `pack`: the space pack's
+    `guard` verb and its tools, when it ships one. `until`: the hook's deadline on the
+    monotonic clock (`main` sets it); without one every part keeps its own clock."""
+    if LOOP.search(command) and PGREP_FULL.search(command):
+        return REFUSAL
+    if not card:
+        return None
+    said = pack_refusal(pack, card, command, cwd, left(until, PACK_SECONDS)) if pack else None
+    if said:
+        return said
+    pushy = bool(PUSH.search(command))
+    git_clock = GIT_READ_SECONDS if until is None else (lambda: left(until, GIT_READ_SECONDS))
+    names = pushes_of(command, cwd, git_clock)
+    if not (pushy or names):
+        return None
+    try:
+        found = card_of(card, left(until, KB_SECONDS))
+    except Exception as error:  # noqa: BLE001 - fail CLOSED for a push only
+        return UNREAD.format(card=card, why=str(error)[:200])
+    if str(found.get("stage")) == "shipping":
+        return SHIPPING.format(card=card)
+    try:
+        return shared_refusal(found, command, cwd, names, git_clock)
+    except Exception as error:  # noqa: BLE001 - fail CLOSED for a push only
+        return UNREAD_FLOW.format(card=card, why=str(error)[:200])
+
+
+def main() -> int:
+    until = time.monotonic() + BUDGET_SECONDS
+    card = sys.argv[1] if len(sys.argv) > 1 else None
+    try:
+        payload = json.load(sys.stdin)
+        command = (payload.get("tool_input") or {}).get("command") or ""
+        why = problem(command, card, payload.get("cwd"), tuple(sys.argv[2:]), until)
+    except Exception:  # noqa: BLE001 - fail open: this guards a full tool set
+        return 0
+    if why is None:
+        return 0
+    print(why, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

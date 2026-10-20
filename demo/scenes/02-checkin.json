@@ -1,0 +1,57 @@
+{
+  "scene": "2. Morning check-in: his line 1, Harbor names what waits, then the same cards on Needs you",
+  "seed": "morning",
+  "start": "/segments/voice/app/",
+  "mic": "line-1.wav",
+  "harbor": [
+    "Harbor, anything pending on my side?"
+  ],
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scale": 2,
+  "hero": "answered",
+  "names": {
+    "mic": "#mic",
+    "said": ".v-turn.latest .v-said",
+    "answer": ".v-turn.latest .v-answer",
+    "review_dates": "button.row:has-text('date range filter')",
+    "review_totals": "button.row:has-text('report totals')",
+    "plan": "button.row:has-text('Paginate')"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "#mic",
+      "label": "ready",
+      "pause": 1500
+    },
+    {
+      "do": "hold",
+      "target": "#mic",
+      "ms": 4600,
+      "label": "speak",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "for": "(document.querySelector('.v-turn.latest .v-answer') || {}).textContent?.length > 20",
+      "timeout": 120000,
+      "label": "answered",
+      "pause": 5000
+    },
+    {
+      "do": "goto",
+      "url": "/?view=attention",
+      "label": "needs you",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "target": "button.row",
+      "label": "the cards",
+      "pause": 4000
+    }
+  ]
+}

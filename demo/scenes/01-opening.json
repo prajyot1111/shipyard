@@ -1,0 +1,45 @@
+{
+  "scene": "1. Opening: the deck in the morning, under the Shipyard titles",
+  "seed": "morning",
+  "start": "/?view=attention",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scale": 2,
+  "hero": "deck",
+  "names": {
+    "rail": "#rail",
+    "header": "#header",
+    "list": "[data-key='attention-list']",
+    "review_dates": "button.row:has-text('date range filter')",
+    "review_totals": "button.row:has-text('report totals')",
+    "plan": "button.row:has-text('Paginate')"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "button.row",
+      "label": "deck",
+      "pause": 3000
+    },
+    {
+      "do": "click",
+      "target": "#rail >> text=Cards",
+      "label": "cards",
+      "pause": 3000
+    },
+    {
+      "do": "click",
+      "target": "#rail >> text=Board",
+      "label": "boards",
+      "pause": 3000
+    },
+    {
+      "do": "click",
+      "target": "#rail >> text=Attention",
+      "label": "attention",
+      "pause": 3000
+    }
+  ]
+}

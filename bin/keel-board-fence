@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""The board fence: the PreToolUse(Bash) hook a confined house runs under.
+
+An errand house (a card with no repo) works in its card directory with a narrow tool set.
+It has Bash for exactly one reason: without it the house cannot reach the board at all, so
+it cannot stage, note, block or split its own card. c-271 was briefed with the whole verb
+list and reported that it could not run `kb` to investigate anything. Bash for one purpose
+has to be Bash for only that purpose, so this hook allows Keel's own `bin/kb`
+and two verbs of `bin/keel` by absolute path, `deck` (reading what the deck shows) and
+`board` (drawing on the blackboard, and only its `push`, `list`, `find`, `show` and
+`delete`), and
+refuses everything else with a line the house can read.
+
+`keel board push` reads its ops on stdin, which a house under this fence cannot give it:
+a heredoc and a pipe are both shell syntax, and shell syntax is the thing being refused.
+So the verb also takes `--file`, and a confined house writes its lines into its own card
+directory with Write and names that file. One plain command, no shell.
+
+The rule is deliberately blunt: ONE invocation of ONE allowed binary, with arguments. A
+chain, a pipe, a redirect, a subshell, a command substitution, a backtick, an env-var
+prefix, a `cd` first, a relative name, or anything this cannot parse is refused rather
+than reasoned about. A fence that tries to understand a compound command is a fence with a
+hole in it.
+
+A fork's review house (c-730 r2.F3) runs under this same fence, given `--review` after the
+card id: it may also run Keel's own two review steps, `bin/keel-review prep` and
+`bin/keel-review draft`, by absolute path, and still nothing of the fork's (no build, no test,
+no script). They are pinned to the card's own state directory and checkout, which the hook
+names (`--card-dir <dir> --worktree <checkout>`): every `--dir` must be that directory and
+every `--worktree` that checkout, both as absolute paths, and `--remote`, `--member` and
+`--twin` are refused, so a hijacked house cannot point them at another card or repo. An
+errand's fence, with no `--review`, is exactly as it was.
+
+Contract: the PreToolUse JSON on stdin; exit 0 to allow, exit 2 with the reason on stderr
+to refuse (Claude Code feeds that line back into the session). It FAILS CLOSED, including
+on its own internal error, because an unparsable command is the case it exists for. The
+machine-wide guard (`~/.claude/hooks/guard-stack-invariants.py`) fails OPEN for the
+opposite reason: it guards a full tool set, where a broken hook would brick every call.
+"""
+
+import json
+import re
+import shlex
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+KB = str(ROOT / "bin" / "kb")
+KEEL = str(ROOT / "bin" / "keel")
+REVIEW = str(ROOT / "bin" / "keel-review")
+REVIEW_VERBS = ("prep", "draft")     # with --review only: a fork's review house (c-730)
+# The flags of those two that name a path, and what each must equal; any other flag that
+# names a path or a remote is refused (c-730 fix check).
+PINNED = {"--dir": "card_dir", "--worktree": "worktree"}
+# The only flags of those two a fork house may write, each exactly (with or without `=`):
+# argparse would expand a shortened one (`--d` to `--dir`), so every other word that starts
+# with a dash is refused, `--remote`, `--member` and `--twin` among them (c-730 fix check).
+VALUED = ("--dir", "--base", "--worktree", "--comment")
+OPTIONAL_VALUE = ("--since",)
+
+
+def same_path(value: str, pinned: str | None) -> bool:
+    """`value` is the pinned path, written absolute: no `..` can reach past it."""
+    if not pinned or not value.startswith("/"):
+        return False
+    return Path(value).resolve() == Path(pinned).resolve()
+
+
+def review_problem(words: list[str], pins: dict) -> str | None:
+    """Why this `keel-review prep|draft` is not the card's own, or None."""
+    if not any(word == "--dir" or word.startswith("--dir=") for word in words):
+        return "a review step names its card directory with --dir"
+    rest = list(words)
+    while rest:
+        word = rest.pop(0)
+        if not word.startswith("-"):
+            continue                                   # a finding's id, a value already taken
+        name, eq, given = word.partition("=")
+        if name not in VALUED + OPTIONAL_VALUE:
+            return (f"{name} is not one of {', '.join(VALUED + OPTIONAL_VALUE)}, written in full: "
+                    f"a review step here takes those alone")
+        if name in OPTIONAL_VALUE:
+            if not eq and rest and not rest[0].startswith("-"):
+                rest.pop(0)
+            continue
+        value = given if eq else (rest.pop(0) if rest else "")
+        if name in PINNED and not same_path(value, pins.get(PINNED[name])):
+            return f"{name} {value} is not this card's own; it is {pins.get(PINNED[name])}"
+    return None
+VERBS = ("deck", "board")     # the only `keel` verbs a confined house may run
+# And of `keel board`, only the five a house has any business running. `open`, `new` and
+# `close` decide whose board is LIVE and end somebody's sitting; the store refuses a house
+# another source's board anyway (`keel/boards.py`), and this keeps the fence's own claim
+# true rather than leaving it to the layer underneath. `delete` is a house's for its OWN
+# card's boards (BD-1), which `keel/boardtrash.py` holds; `restore` is his alone.
+BOARD_VERBS = ("push", "list", "find", "show", "delete")
+
+REFUSAL = "this house is confined to the board: kb, keel deck and keel board only"
+
+# Shell syntax that could reach a second program, a file, or a subshell. `$` is not here:
+# `$KEEL_CARD` is how a house names its own card and an expansion cannot introduce an
+# operator, so it is allowed on its own below, while `$(` is not.
+UNSAFE = re.compile(r"""[;&|<>`\n\r(){}\[\]\\!*?~]""")
+BAD_DOLLAR = re.compile(r"\$(?![A-Za-z_][A-Za-z0-9_]*)")
+
+
+def problem(command: str, review: bool = False, pins: dict | None = None) -> str | None:
+    """Why this command is not one plain invocation of an allowed binary, or None."""
+    if not command.strip():
+        return "there is no command"
+    found = UNSAFE.search(command)
+    if found:
+        return f"it carries shell syntax ({found.group(0)!r}), so it is more than one plain command"
+    if BAD_DOLLAR.search(command):
+        return "it carries a substitution, so what it would run is not what it says"
+    try:
+        words = shlex.split(command)
+    except ValueError as why:
+        return f"it cannot be parsed ({why})"
+    if not words:
+        return "there is no command"
+    if words[0] == KB:
+        return None
+    if review and words[0] == REVIEW and words[1:2] and words[1] in REVIEW_VERBS:
+        return review_problem(words[2:], pins or {})
+    if words[0] == KEEL:
+        if words[1:2] == ["board"]:
+            if words[2:3] and words[2] in BOARD_VERBS:
+                return None
+            return (f"of `keel board`, a house may run {', '.join(BOARD_VERBS)}; "
+                    f"open, new, close and restore are the user's or the talker's")
+        if words[1:2] and words[1] in VERBS:
+            return None
+        return "only `keel deck` and `keel board` are allowed, not another keel verb"
+    if Path(words[0]).name in ("kb", "keel"):
+        return "name it by its absolute path, not by a name PATH resolves"
+    return f"{words[0]} is not the board"
+
+
+def reason(card_id: str, why: str) -> str:
+    """One line, for a house that has to act on it without asking anyone."""
+    return (f"{REFUSAL} ({why}). Card {card_id} runs in its own card directory: run "
+            f"`{KB} <verb> ...`, `{KEEL} deck ...` or `{KEEL} board push --card {card_id} "
+            f"--file <ops>`, one command per call, and do the rest with Read, Write and Edit.")
+
+
+def main(argv: list[str]) -> int:
+    card_id = argv[0] if argv else "this card"
+    review = "--review" in argv[1:]
+    pins = {key: argv[argv.index(flag) + 1] for flag, key in (("--card-dir", "card_dir"), ("--worktree", "worktree"))
+            if flag in argv[1:-1]}
+    try:
+        payload = json.load(sys.stdin)
+        command = (payload.get("tool_input") or {}).get("command") or ""
+    except Exception as error:  # noqa: BLE001 - fail closed: the fence IS the confinement
+        print(reason(card_id, f"the hook could not read the command ({error})"), file=sys.stderr)
+        return 2
+    why = problem(command, review, pins)
+    if why is None:
+        return 0
+    print(reason(card_id, why), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

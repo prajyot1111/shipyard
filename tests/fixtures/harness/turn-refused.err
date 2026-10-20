@@ -1,0 +1,1 @@
+Error: Session 087e1b20-cf55-452d-84f8-e37fa905fa98 is running as a background session (087e1b20). Run `claude attach 087e1b20` to open it, or `claude stop 087e1b20` first to resume it here. Add --fork-session to branch off a copy instead.

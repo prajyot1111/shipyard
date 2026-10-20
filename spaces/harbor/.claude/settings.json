@@ -1,0 +1,60 @@
+{
+  "env": {
+    "DISABLE_AUTOUPDATER": "1"
+  },
+  "permissions": {
+    "deny": [
+      "mcp__claude_ai_Gmail",
+      "mcp__claude_ai_Slack",
+      "mcp__claude_ai_Strava",
+      "mcp__claude-in-chrome",
+      "mcp__claude_ai_Claude_Docs",
+      "Agent(fork)",
+      "Read(//home/ubuntu/keel/state/human.token)",
+      "Bash(*human.token*)",
+      "Read(//home/ubuntu/keel/state/house.key)",
+      "Bash(*house.key*)",
+      "Read(//**/human.token)",
+      "Read(//**/house.key)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "S=\"$HOME/.claude/hooks/guard-stack-invariants.py\"; [ -f \"$S\" ] || { echo \"guard-stack-invariants: MISSING at $S, stack invariants are NOT enforced\" >&2; exit 0; }; exec python3 \"$S\"",
+            "timeout": 10,
+            "statusMessage": "Checking stack invariants"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"$KEEL_TALKER_TURNS\" = 1 ] || exit 0; exec \"$KEEL_HOME/bin/keel\" talker turn start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"$KEEL_TALKER_TURNS\" = 1 ] || exit 0; exec \"$KEEL_HOME/bin/keel\" talker turn over",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "theme": "dark",
+  "agentPushNotifEnabled": true
+}

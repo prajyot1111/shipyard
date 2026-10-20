@@ -1,0 +1,12 @@
+# A space on the example pack (c-617). demo/sandbox/setup writes one like it, with the
+# sandbox's own repos and directories, for the demo's board.
+
+[spaces.work]
+pack = "sandbox"
+config_dir = "~/.claude"
+contract = "demo/sandbox/space-work.md"
+pipeline = "demo/sandbox/pipeline-work.md"
+
+[spaces.work.repos]
+api = "~/sandbox/api"
+web = "~/sandbox/web"

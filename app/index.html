@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-mode="work" data-density="work">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Shipyard</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#101418">
+<link rel="icon" href="/icons/keel-tile.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/keel-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/icons/keel-180.png">
+<link rel="stylesheet" href="/ui.css">
+<link rel="stylesheet" href="/ui.find.css">
+<script>
+/* ?space= and ?d= pin the palette and the density for a screenshot run; otherwise the
+   page opens in the space it was left in, at the work density (nothing on the deck sets
+   another, so nothing is remembered for it). Set before first paint so nothing flashes. */
+(function () {
+  var q = new URLSearchParams(location.search);
+  var m = q.get('space'), d = q.get('d');
+  try {
+    m = m || localStorage.getItem('keel.space');
+  } catch (e) { /* a private window is not an error */ }
+  if (m === 'work' || m === 'personal') document.documentElement.setAttribute('data-mode', m);
+  if (d === 'glance' || d === 'work' || d === 'deep') document.documentElement.setAttribute('data-density', d);
+  var CANVAS = { work: '#101418', personal: '#161412' };
+  var tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute('content', CANVAS[document.documentElement.getAttribute('data-mode')] || CANVAS.work);
+})();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('service worker:', e); });
+  });
+}
+</script>
+</head>
+<body>
+<nav class="rail" id="rail" aria-label="Sections"></nav>
+<div class="main">
+  <header class="header" id="header"></header>
+  <div class="controls" id="controls"></div>
+  <main class="body" id="body"></main>
+</div>
+<nav class="dock" id="dock" aria-label="Sections"></nav>
+<div id="sheet"></div>
+<div id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- The deck's scripts, in their load order, and the views they draw come from ONE file,
+     app/views.json (c-634): the server writes the manifest inline as window.KEEL_VIEWS and
+     one script tag per entry where the mark below is (keel/deckviews.py). A view is a row
+     there plus its own script, and nothing here is edited for it. ELK (vendored, 1.6 MB,
+     app/vendor/README.md) is not among them: ui.board.js adds it the first time a graph is
+     drawn, so a page with no diagram never pays for it. -->
+<!-- keel:views -->
+</body>
+</html>

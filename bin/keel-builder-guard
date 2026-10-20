@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Never edit a live checkout: the builder's PreToolUse hook (`keel/builderguard.py`)."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.builderguard import main  # noqa: E402
+
+sys.exit(main())

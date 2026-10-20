@@ -1,0 +1,138 @@
+/* THE FIND BAR (app/ui.find.js), in the deck's own tokens: two type sizes of the deck's
+ * four (13 for words, 11 for counts and headings) and 15 for the sheet's title, weights
+ * 400 and 600, every length a multiple of 4 (1px hairlines aside), 44px targets on the
+ * phone, square boxes and 20px pills, no shadows.
+ *
+ * NOTHING IN A CONTROL IS EVER CLIPPED. A button carries a short fixed label that fits
+ * four across at 390; a menu item, a facet value and a suggestion WRAP onto a second line
+ * (`overflow-wrap:anywhere`, never `nowrap` with a hidden overflow), and a facet value can
+ * never run under its count because the count is its own flex box that does not shrink.
+ * The one ellipsis is a token's value, which is DESIGNED: the full text is its title and
+ * its aria-label, and the token itself never overflows its own box.
+ * `bin/keel-find-audit` measures all of it in a real browser at 390, 900 and 1440. */
+
+.find{display:flex;flex-direction:column;gap:8px;position:relative}
+.find-bar{display:flex;align-items:center;gap:8px;position:relative}
+.find-pop{position:relative;flex:0 0 auto;display:flex}
+
+/* ---------- the search field and its suggestions ---------- */
+.find-search{flex:1 1 auto;min-width:0;position:relative;display:flex;align-items:center}
+.find-search input{width:100%;height:36px;padding:0 12px 0 32px;font-size:13px}
+.find-search input:focus{outline:none;border-color:var(--accent)}
+.find-ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:13px;line-height:1;pointer-events:none}
+.find-sug{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:13;max-height:360px;overflow:auto;
+  background:var(--s1);border:1px solid var(--hair-hi);padding:4px 0;display:flex;flex-direction:column}
+.find-sughead,.find-sechead{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2);padding:8px 12px 4px}
+.find-sugrow{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:8px 12px;
+  font-size:13px;cursor:pointer}
+.find-sugrow.hi{background:var(--s2);box-shadow:inset 2px 0 0 var(--accent)}
+.find-sugval{color:var(--accent-ink);font-size:13px;min-width:0;overflow-wrap:anywhere}
+.find-sugname{color:var(--ink);min-width:0;overflow-wrap:anywhere;text-align:right}
+
+/* ---------- the four buttons ---------- */
+.find-btn{height:36px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--s2);border:1px solid var(--hair-hi);color:var(--ink);font-size:13px;font-weight:600;white-space:nowrap}
+.find-btn:hover{border-color:var(--ink-3)}
+.find-btn.open{border-color:var(--accent)}
+.find-chev{font-size:11px;color:var(--ink-2)}
+.find-n{font-family:var(--mono);font-size:11px;font-weight:600;min-width:20px;height:20px;line-height:20px;padding:0 4px;
+  text-align:center;border-radius:var(--pill);background:var(--accent-soft);color:var(--accent-ink)}
+
+/* ---------- menus: Views, Sort, View ---------- */
+.find-menu,.find-panel{position:absolute;top:calc(100% + 4px);z-index:12;background:var(--s1);border:1px solid var(--hair-hi)}
+.find-menu{width:280px;max-width:calc(100vw - 32px);padding:4px 0;display:flex;flex-direction:column}
+.find-viewspop .find-menu{left:0}
+.find-sortpop .find-menu,.find-viewpop .find-menu,.find-panel{right:0}
+.find-item{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:8px 12px;
+  width:100%;font-size:13px;color:var(--ink);text-align:left}
+.find-item:hover,.find-item:focus-visible,.find-row:hover{background:var(--s2)}
+.find-item.on{color:var(--accent-ink);font-weight:600}
+.find-itemlbl{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.find-tick{flex:0 0 12px;font-size:13px;color:var(--accent-ink);text-align:right}
+.find-save{color:var(--accent-ink);font-weight:600;border-top:1px solid var(--hair)}
+.find-sec+.find-sec{border-top:1px solid var(--hair);margin-top:4px}
+.find-ownrow{display:flex;align-items:stretch}
+.find-ownrow .find-item{flex:1 1 auto;min-width:0}
+.find-del{width:36px;flex:0 0 36px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);font-size:15px}
+.find-del:hover{color:var(--crit)}
+.find-saveform{display:flex;gap:8px;padding:8px 12px;border-top:1px solid var(--hair)}
+.find-saveform input{flex:1 1 auto;min-width:0;height:36px;font-size:13px}
+.find-savebtn{height:36px;padding:0 12px;background:var(--accent);color:var(--on-accent);font-size:13px;font-weight:600;flex:0 0 auto}
+
+/* ---------- the filter panel (desk) ---------- */
+.find-panel{width:360px;max-width:calc(100vw - 32px);max-height:min(560px,calc(100dvh - 160px));display:flex;flex-direction:column}
+.find-panelbody{flex:1 1 auto;min-height:0;overflow:auto;padding:8px;display:flex;flex-direction:column;gap:12px}
+.find-facet{display:flex;flex-direction:column}
+.find-facet .find-sechead{padding:4px}
+.find-facetq{height:36px;margin:4px;font-size:13px}
+.find-row{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px;width:100%;font-size:13px;color:var(--ink);text-align:left}
+.find-box{width:16px;height:16px;flex:0 0 16px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--hair-hi);background:var(--s2);color:var(--on-accent);font-size:11px;font-weight:600;line-height:1}
+.find-row[aria-checked="true"] .find-box{background:var(--accent);border-color:var(--accent)}
+.find-rowlbl{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.find-cnt{flex:0 0 auto;font-size:11px;color:var(--ink-2)}
+/* a value that would give nothing is dimmed, never hidden: it is still a thing he can pick */
+.find-row.zero .find-rowlbl,.find-row.zero .find-cnt{color:var(--ink-3)}
+.find-row.zero .find-box{border-color:var(--hair)}
+.find-toggle{width:36px;height:20px;flex:0 0 36px;border-radius:var(--pill);background:var(--s3);border:1px solid var(--hair-hi);position:relative}
+.find-toggle::after{content:'';position:absolute;top:1px;left:1px;width:16px;height:16px;border-radius:var(--pill);background:var(--ink-3)}
+.find-switch[aria-checked="true"] .find-toggle{background:var(--accent-soft);border-color:var(--accent)}
+.find-switch[aria-checked="true"] .find-toggle::after{left:17px;background:var(--accent)}
+.find-foot{display:flex;gap:8px;padding:8px;border-top:1px solid var(--hair);flex:0 0 auto}
+.find-foot .btn{flex:1 1 0;height:36px}
+
+/* ---------- the token line ---------- */
+.find-tokens{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.find-now{font-size:13px;color:var(--ink-2);padding-right:4px;overflow-wrap:anywhere}
+.find-token{height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;max-width:100%;
+  border-radius:var(--pill);background:var(--s2);border:1px solid var(--hair-hi);color:var(--ink);font-size:13px}
+.find-token:hover{border-color:var(--ink-3)}
+.find-toklbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.find-x{flex:0 0 auto;font-family:var(--mono);color:var(--ink-2)}
+.find-clearall{height:32px;padding:0 8px;color:var(--ink-2);font-size:13px;white-space:nowrap}
+.find-clearall:hover{color:var(--ink)}
+
+/* ---------- the phone: two rows, a sheet, 44px everywhere a thumb lands ---------- */
+@media(max-width:899px){
+  .find-bar{flex-wrap:wrap;row-gap:8px}
+  .find-search{order:-1;flex:1 1 100%}
+  .find-search input{height:44px}
+  /* the four buttons share the second row, each as wide as its label needs and the spare
+     width shared out; the menus then drop from the whole bar, not from a button */
+  .find-pop{position:static;flex:1 1 auto}
+  .find-btn{height:44px;width:100%;padding:0 8px;gap:4px}
+  .find-menu,.find-sortpop .find-menu,.find-viewpop .find-menu,.find-viewspop .find-menu{left:0;right:0;width:auto;max-width:none}
+  .find-item,.find-sugrow,.find-row{min-height:44px}
+  .find-del{width:44px;flex-basis:44px}
+  .find-saveform input,.find-savebtn,.find-facetq{height:44px}
+  /* the token line is the one thing that may scroll sideways, with a fade on the edge that
+     holds more (`data-edge`, set by K.markStrips) */
+  .find-tokens{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 calc(-1 * var(--padx));
+    padding:0 var(--padx);overscroll-behavior-x:contain}
+  .find-tokens::-webkit-scrollbar{display:none}
+  .find-tokens[data-edge="end"]{-webkit-mask-image:var(--fade-end);mask-image:var(--fade-end)}
+  .find-tokens[data-edge="start"]{-webkit-mask-image:var(--fade-start);mask-image:var(--fade-start)}
+  .find-tokens[data-edge="both"]{-webkit-mask-image:var(--fade-both);mask-image:var(--fade-both)}
+  .find-now{flex:0 0 auto;white-space:nowrap}
+  .find-token,.find-clearall{height:44px;flex:0 0 auto}
+  .find-token{max-width:280px}
+  .find-scrim{position:fixed;inset:0;background:rgba(0,0,0,.56);z-index:20}
+  .find-sheet{position:fixed;left:0;right:0;bottom:var(--kbd,0px);height:80dvh;z-index:21;background:var(--canvas);
+    border-top:1px solid var(--hair-hi);display:flex;flex-direction:column}
+  .find-grab{display:flex;justify-content:center;padding:8px 0 4px;flex:0 0 auto}
+  .find-grab span{width:36px;height:4px;border-radius:var(--pill);background:var(--hair-hi)}
+  .find-sheethead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px 4px 16px;
+    border-bottom:1px solid var(--hair);flex:0 0 auto}
+  .find-sheettitle{font-size:15px;font-weight:600}
+  .find-close{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink-2)}
+  .find-sheetbody{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:20px}
+  .find-sheet .find-box{width:20px;height:20px;flex-basis:20px;font-size:13px}
+  .find-sheet .find-foot{padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+  .find-sheet .find-foot .btn{height:44px}
+}
+
+/* ---------- what the pages draw under the bar ---------- */
+.fgroup-head{display:flex;align-items:center;gap:8px;padding:12px 0 4px;font-family:var(--mono);font-size:11px;
+  font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.fgroup-head .n{border:1px solid var(--hair-hi);padding:0 4px;font-weight:400}

@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""The one-time sync of the work cards approved before shipping existed: each done card
+whose pull request is still open moves to shipping (keel/shipsync.py). `--dry-run` writes
+nothing. Run it on the machine that holds the work houses."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.shipsync import main  # noqa: E402
+
+sys.exit(main(sys.argv[1:]))

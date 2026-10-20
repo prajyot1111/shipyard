@@ -1,0 +1,28 @@
+{
+  "scene": "8. Outcome gate: what changed, the findings fixed, the risk, a pull request in each repo; approve; both ready; shipping",
+  "seed": "live: the export card at its outcome gate (or `demo/seed export <card>` when the house did not get there)",
+  "start": "/outcome/{{card}}",
+  "viewport": {"width": 1920, "height": 1080},
+  "scale": 2,
+  "hero": "the risk",
+  "names": {
+    "stands": ".pblock[data-bid='stands.p1']",
+    "changed": ".pblock[data-bid='why.list1']",
+    "findings": ".pblock[data-bid='why.table1']",
+    "risk": ".pblock[data-bid='risk.p1']",
+    "pr_api": "a.pother:has-text('api #')",
+    "pr_web": "a.pother:has-text('web #')",
+    "approve": "button:has-text('Approve outcome')"
+  },
+  "steps": [
+    {"do": "wait", "target": "stands", "label": "the outcome", "pause": 3500},
+    {"do": "scroll", "target": "changed", "label": "what changed", "pause": 3500},
+    {"do": "scroll", "target": "findings", "label": "findings fixed", "pause": 3500},
+    {"do": "scroll", "target": "risk", "label": "the risk", "pause": 3500},
+    {"do": "scroll", "y": -20000, "label": "the pull requests", "pause": 3000},
+    {"do": "click", "target": "approve", "label": "approve", "pause": 1000},
+    {"do": "wait", "for": "!document.body.innerText.includes('outcome gate open')", "timeout": 90000, "label": "approved", "pause": 3000},
+    {"do": "goto", "url": "/?view=cards&card={{card}}", "label": "shipping", "pause": 0},
+    {"do": "wait", "for": "document.body.innerText.includes('shipping')", "timeout": 60000, "label": "on its way", "pause": 4000}
+  ]
+}

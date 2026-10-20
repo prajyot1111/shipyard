@@ -1,0 +1,66 @@
+# The demo sandbox's Keel (demo/sandbox/setup writes this file into the sandbox). A toml named
+# by KEEL_CONFIG is taken at its word (keel/config.py), so every path below is the sandbox's
+# own: its board, its segments, its port, and an empty adapters directory (the work space is
+# the sandbox pack, `packs/sandbox/`, so no other adapter's words reach the sandbox's voice).
+# It names no [integration] and no real repo, so nothing here can reach his board, a real
+# code host or a deploy. Every space's houses run in the personal config dir.
+
+[keel]
+state_dir = "{home}/state"
+segments_dir = "{home}/segments"
+fetch_lock_dir = "{home}/state/fetch-locks"
+adapters_dir = "{home}/adapters"
+serve_port = {port}
+lavish_port = {lavish_port}
+host = "box"
+houses_max = 2
+reviews_max = 1
+poll_seconds = 15
+drain_paused = true
+merge_queue = false
+plan_pages = true
+multi_after = true
+# Bosun files and builds Keel's own fixes as personal cards (the console space is retired, c-593).
+bosun_builder = true
+
+[spaces.work]
+config_dir = "{config_dir}"
+contract = "{keel_home}/demo/sandbox/space-work.md"
+pack = "sandbox"
+model = "opus"
+confirm = ["repo", "autonomy"]
+house_review = true
+pipeline = "{keel_home}/demo/sandbox/pipeline-work.md"
+review_auto = false
+review_model = "opus"
+# As the live work space (c-597): preship first, one full review pass per trip (c-604: the
+# sandbox ran the serial order while the live work space did not).
+preship_first = true
+review_full_rounds = 1
+# c-655: the demo shows review answered as it arrives; both are off unless a space says.
+ship_auto_comments = true
+ship_auto_checks = true
+
+[spaces.work.repos]
+api = "{home}/repos/api"
+web = "{home}/repos/web"
+
+[spaces.personal]
+config_dir = "{config_dir}"
+contract = "{keel_home}/etc/space-personal.md"
+projects_dir = "{home}/projects"
+model = "opus"
+
+# Bosun's own session is never started in the sandbox: it lives on a machine this toml
+# gives no address for. Its board (requests, asks, the cards it builds) is here like any other.
+[console]
+host = "mac"
+
+# The box's builder, the superuser over Keel's repo (c-619, keel/builder.py), as keel.toml.
+[builder]
+superuser = true
+repos = ["keel"]
+
+[voice]
+port = {voice_port}
+space_default = "work"

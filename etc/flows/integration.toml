@@ -1,0 +1,44 @@
+# Keel's flow for a space whose every repo lands on an integration branch (c-640), as Keel's
+# own repo does: your Approve outcome lands the card on that branch with the suite green,
+# and your deploy moves the trunk to it. Nothing is live until you deploy, and nothing is
+# pushed. The deck draws the
+# integration branch by its NAME from `[integration]` (`flows.drawn`); the label here stays in
+# words, which name no git branch, so the flow adds nothing to the push fence. A picture of
+# what Keel does: no move here is a button.
+name = "Integration branch"
+description = "Your approval lands the card on the integration branch; your deploy puts it live."
+
+[[branch]]
+id = "card"
+label = "card branch"
+kind = "card"
+
+[[branch]]
+id = "integration"
+label = "integration branch"
+kind = "integration"
+
+[[branch]]
+id = "trunk"
+label = "trunk"
+kind = "trunk"
+
+[[move]]
+id = "land"
+label = "Approve outcome"
+from = "card"
+to = "integration"
+by = "keel"
+step = "land"
+stages = ["review"]
+group = "Decide"
+about = "Your approval merges the card onto the integration branch once the suite is green. It is merged locally, not pushed."
+
+[[move]]
+id = "deploy"
+label = "Deploy"
+from = "integration"
+to = "trunk"
+by = "keel"
+step = "deploy"
+about = "Your deploy runs the suite again and moves the trunk, which restarts what runs it."

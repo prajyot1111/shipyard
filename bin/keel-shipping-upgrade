@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""The one-time carry of work cards to the living-house review (c-600, keel/shipupgrade.py).
+A dry run by default: it prints what it would do. `--run` applies it; `--deck <url>` prints
+the plan from a live deck's state, read-only. It never stops, starts or resumes a session.
+Run it with the drain paused, after deploying the box and the Mac."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.shipupgrade import main  # noqa: E402
+
+sys.exit(main(sys.argv[1:]))

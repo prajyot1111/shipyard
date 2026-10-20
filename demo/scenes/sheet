@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""A contact sheet: one frame per scene from each scene's kept take.
+
+    demo/sandbox/run demo/scenes/sheet <out-dir>
+
+Reads `recordings/index.json`, copies each kept take's frame (the still whose label the
+scene file names as `hero`, else its last) into `<out-dir>/sheet/NN.png`, writes
+`<out-dir>/contact-sheet.html` beside a `theme.css` if the directory has one, and shoots it
+to `<out-dir>/contact-sheet.png` with keel-browser. Phone scenes sit in narrow cells.
+"""
+
+import html
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+BROWSER = HERE.parent.parent / "bin" / "keel-browser"
+
+
+def frame_of(take: Path, spec: dict) -> Path | None:
+    stills = sorted((take / "clip.stills").glob("*.png"))
+    hero = spec.get("hero")
+    chosen = [p for p in stills if hero and p.stem.endswith(hero.lower().replace(" ", "-"))]
+    return (chosen or stills[-1:] or [None])[0]
+
+
+def rows(home: Path) -> list[dict]:
+    index = json.loads((home / "recordings" / "index.json").read_text())
+    found = []
+    for name in sorted(index["scenes"]):
+        row = index["scenes"][name]
+        if not row.get("kept"):
+            found.append({"name": name, "frame": None, "phone": False, "title": name, "note": "no kept take"})
+            continue
+        take = home / "recordings" / name / row["kept"]
+        spec = json.loads((take / "steps.json").read_text())
+        scene_file = HERE / f"{name}.json"          # today's hero, for a take recorded before it had one
+        if scene_file.is_file():
+            spec["hero"] = json.loads(scene_file.read_text()).get("hero", spec.get("hero"))
+        found.append({"name": name, "frame": frame_of(take, spec), "phone": spec["viewport"]["width"] < 600,
+                      "title": spec.get("scene", name), "note": f"{row['kept']}, {len(row['takes'])} take(s)"})
+    return found
+
+
+def page(cells: list[dict]) -> str:
+    items = []
+    for c in cells:
+        img = f'<img src="sheet/{c["name"][:2]}.png" alt="">' if c["frame"] else "<p class=\"muted\">none</p>"
+        items.append(f'<figure class="{"phone" if c["phone"] else "desk"}">{img}'
+                     f'<figcaption>{html.escape(c["title"])}<br><span class="muted mono">{html.escape(c["note"])}</span>'
+                     f"</figcaption></figure>")
+    return ("<!doctype html><html><head><meta charset=\"utf-8\"><link rel=\"stylesheet\" href=\"theme.css\">"
+            "<title>Contact sheet</title><style>"
+            "body{padding:16px} main{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}"
+            "figure{margin:0} figure.desk img{width:560px} figure.phone img{width:180px}"
+            "figure.desk{width:560px} figure.phone{width:180px} img{display:block;border:1px solid #333}"
+            "figcaption{font-size:12px;margin-top:4px}"
+            "</style></head><body><h1>Shipyard demo: one frame per scene</h1><main>"
+            + "".join(items) + "</main></body></html>")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 1:
+        print(__doc__, file=sys.stderr)
+        return 2
+    home = Path(os.environ.get("KEEL_SANDBOX") or "~/keel-sandbox").expanduser()
+    out = Path(argv[0]).expanduser().resolve()
+    (out / "sheet").mkdir(parents=True, exist_ok=True)
+    cells = rows(home)
+    for c in cells:
+        if c["frame"]:
+            shutil.copyfile(c["frame"], out / "sheet" / f"{c['name'][:2]}.png")
+    (out / "contact-sheet.html").write_text(page(cells))
+    done = subprocess.run([str(BROWSER), "shot", (out / "contact-sheet.html").as_uri(), str(out / "contact-sheet.png"),
+                           "--full-page", "--width", "1800", "--height", "900", "--settle", "1500"],
+                          capture_output=True, text=True)
+    print(done.stdout.strip() or done.stderr.strip())
+    return done.returncode
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

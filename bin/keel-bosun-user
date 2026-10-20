@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Retired (c-622, c-648): Bosun as its own Unix user reached the board over HTTP, which Keel
+no longer has on one machine. This stays only to say so; Bosun runs as Keel's own user."""
+import sys
+
+sys.exit("keel-bosun-user is retired (c-622, c-648): Keel runs on one machine, and Bosun as "
+         "its own Unix user reached the board over HTTP, which Keel no longer has. Bosun runs "
+         "as Keel's own user: [console] config_dir and checkout are ignored, and the config's "
+         "warnings (`keel doctor`) name them.")

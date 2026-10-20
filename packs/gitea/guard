@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""`guard <id>`: whether a command this card's house is about to run may run, as JSON; the
+command and the house's cwd come as JSON on stdin (gt_fence.py, the kit's `guard.py`). Keel's
+house guard asks it on every Bash call, so it loads nothing but Gitea's guard policy and the
+kit's reader and guard."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path[:0] = [str(HERE), os.environ.get("KEEL_HOME") or str(HERE.parent.parent), str(HERE.parent.parent)]
+
+import gt_fence  # noqa: E402
+from keel.packkit import guard  # noqa: E402
+
+sys.exit(guard.main(sys.argv[1:], pack=HERE, policy=gt_fence.POLICY))

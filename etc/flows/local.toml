@@ -1,0 +1,28 @@
+# Keel's flow for a space with no code host (c-640): your Approve outcome merges the card
+# into the branch its checkout has out, on this machine. Nothing is pushed. Where only SOME
+# of the space's repos land on an `[integration]` branch, the deck draws this flow and names
+# that branch and its repos beside the base (`flows.drawn`, c-664). A picture of what Keel
+# does: no move here is a button.
+name = "Local merge"
+description = "Your approval merges the card into the checkout's branch, on this machine. It is merged locally, not pushed."
+
+[[branch]]
+id = "card"
+label = "card branch"
+kind = "card"
+
+[[branch]]
+id = "base"
+label = "{base}"
+kind = "base"
+
+[[move]]
+id = "land"
+label = "Approve outcome"
+from = "card"
+to = "base"
+by = "keel"
+step = "land"
+stages = ["review"]
+group = "Decide"
+about = "Your approval merges the card into the branch its checkout has out, after the repo's tests when it has a [tests] entry. It is merged locally, not pushed."

@@ -1,0 +1,115 @@
+{
+  "scene": "4. Starting a task: the export card is filed on the deck, attended, api and web, and the drain starts its house; then the board as a kanban and the reviews, for the short cuts (c-807)",
+  "seed": "morning, after scene 3",
+  "start": "/?view=attention",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scale": 2,
+  "hero": "house started",
+  "names": {
+    "newcard": "button:has-text('New card')",
+    "modal": "#modal",
+    "title": "#modal input[placeholder='what needs doing']",
+    "brief": "#modal textarea",
+    "api": "#modal button.chip:has-text('api')",
+    "web": "#modal button.chip:has-text('web')",
+    "autonomy": "#modal label:has-text('Autonomy') select",
+    "start": "#modal button:has-text('Create and start')",
+    "row": "tr:has-text('Add CSV export'), .row:has-text('Add CSV export')",
+    "house": "#body :text-matches('working|running|house', 'i')",
+    "dark": "div.tile:has-text('dark theme')",
+    "digest": "div.tile:has-text('weekly reports digest')",
+    "rounding": "div.tile:has-text('totals rounding')",
+    "tile": "div.tile:has-text('Add CSV export')",
+    "building": "section.lane[data-key='building']",
+    "review_owner": "div.tile:has-text('owner filter')",
+    "review_empty": "div.tile:has-text('empty state')"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "newcard",
+      "label": "deck",
+      "pause": 1500
+    },
+    {
+      "do": "click",
+      "target": "newcard",
+      "label": "new card",
+      "pause": 800
+    },
+    {
+      "do": "type",
+      "target": "title",
+      "text": "Add CSV export to the reports page",
+      "delay": 55,
+      "label": "title",
+      "pause": 500
+    },
+    {
+      "do": "type",
+      "target": "brief",
+      "text": "A button on the reports page that downloads the list as CSV, with the columns the table shows. The api serves /reports.csv and the web page links to it.",
+      "delay": 25,
+      "label": "brief",
+      "pause": 500
+    },
+    {
+      "do": "click",
+      "target": "web",
+      "label": "web too",
+      "pause": 600
+    },
+    {
+      "do": "eval",
+      "js": "(() => { const s = [...document.querySelectorAll('#modal select')]; const set = (sel, v) => { sel.value = v; sel.dispatchEvent(new Event('change', {bubbles: true})); }; set(s.find(x => [...x.options].some(o => o.value === 'attended')), 'attended'); set(s.find(x => [...x.options].some(o => o.value === 'feature')), 'feature'); return s.map(x => x.value); })()",
+      "label": "attended feature",
+      "pause": 1500
+    },
+    {
+      "do": "click",
+      "target": "start",
+      "label": "create and start",
+      "pause": 1500
+    },
+    {
+      "do": "goto",
+      "url": "/?view=cards",
+      "label": "cards",
+      "pause": 1000
+    },
+    {
+      "do": "wait",
+      "for": "[...document.querySelectorAll('tr, .row')].some(r => r.textContent.includes('Add CSV export') && /building|planning|working/i.test(r.textContent))",
+      "timeout": 240000,
+      "label": "house started",
+      "pause": 4000
+    },
+    {
+      "do": "goto",
+      "url": "/?view=cards&inc=&layout=kanban",
+      "label": "board",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "target": "div.tile",
+      "label": "the board",
+      "pause": 3000
+    },
+    {
+      "do": "goto",
+      "url": "/?view=reviews&inc=&layout=kanban",
+      "label": "reviews",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "target": "div.tile",
+      "label": "the reviews",
+      "pause": 3000
+    }
+  ]
+}

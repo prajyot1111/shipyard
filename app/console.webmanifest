@@ -1,0 +1,19 @@
+{
+  "id": "/console",
+  "name": "Bosun",
+  "short_name": "Bosun",
+  "description": "The admin console: what needs you, requests, Bosun's board and its journal.",
+  "start_url": "/console",
+  "scope": "/console",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0B0C",
+  "theme_color": "#0B0B0C",
+  "icons": [
+    { "src": "/icons/bosun-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/bosun-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/bosun-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/bosun-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/bosun-tile.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

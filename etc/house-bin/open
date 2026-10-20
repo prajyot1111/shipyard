@@ -1,0 +1,48 @@
+#!/bin/sh
+# `open`, for a house and only for a house.
+#
+# A house has `etc/house-bin` first on its PATH (`keel/config.py: house_path`), so this is
+# the `open` that every command a house runs finds, `lavish-axi`'s browser launch included:
+# the npm `open` package spawns the bare name `open` on macOS, which PATH resolves. A human
+# never has this directory on his PATH, so his own `open` is the real one.
+#
+# It opens nothing. A plan is read from the deck, on a phone as often as at a desk, so a
+# tab a house opens is a tab on a machine nobody may be sitting at. The URL goes to the
+# card's `opens.log` and onto the card through `kb note`, where he can see it either way.
+# It always exits 0: the caller carries on as though the tab had opened.
+#
+# `-a`/`-b` take an application argument, which is not a target, and everything after
+# `--args` belongs to the application, so both are stepped over.
+set -u
+
+# Nothing here may depend on a command being findable: this runs with whatever PATH the
+# caller had, and a shim that silently does nothing is worse than no shim. `mkdir` and
+# `date` are attempted and their absence tolerated; the card directory already exists.
+log_target() {
+  [ -n "${KEEL_CARD:-}" ] || return 0
+  # The card's own directory (c-604): KEEL_CARD_DIR, which follows `state_dir`; the old
+  # guess under KEEL_HOME only when a house started before it was set.
+  dir="${KEEL_CARD_DIR:-}"
+  if [ -z "$dir" ]; then
+    [ -n "${KEEL_HOME:-}" ] || return 0
+    dir="$KEEL_HOME/state/cards/$KEEL_CARD"
+  fi
+  mkdir -p "$dir" 2>/dev/null || true
+  stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || stamp="?"
+  printf '%s\t%s\n' "$stamp" "$1" >> "$dir/opens.log" 2>/dev/null || true
+  if command -v kb >/dev/null 2>&1; then
+    kb note "$KEEL_CARD" "surface: $1" >/dev/null 2>&1 || true
+  fi
+}
+
+skip=0
+for arg do
+  if [ "$skip" = 1 ]; then skip=0; continue; fi
+  case "$arg" in
+    --args) break ;;
+    -a|-b) skip=1; continue ;;
+    -*) continue ;;
+  esac
+  log_target "$arg"
+done
+exit 0

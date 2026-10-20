@@ -1,0 +1,58 @@
+# The example pack (c-617): a whole work integration with nothing real behind it. Its
+# tracker and code host are JSON files and its origins bare repos on this disk, so a fresh
+# install can run a card end to end on it. Copy this directory to start a pack of your own;
+# docs/atlas/62-packs.md is the format and the rules for writing one.
+name = "sandbox"
+version = "1"
+description = "A sandbox work space: a fake tracker and code host on disk, for the demo and for learning the adapter contract."
+# Demo only (c-688): its verbs refuse outside a demo sandbox (sb_card.home), so Setup does not
+# offer it on an install. `keel new pack` leaves this line out of the copy it makes.
+demo_only = true
+
+[adapter]
+spaces = ["work"]
+
+[provides]
+rules = ["rules/house.md", "rules/comments.md"]
+skills = []
+config_example = "config.example.toml"
+
+# What it provides (c-629): each claim needs its executables here, or the pack is refused.
+[capabilities]
+tracker = true
+codehost = true
+reviews = true
+routes = ["reviews"]
+
+# What this space calls things (c-630): every word differs from the core's defaults and
+# from the work pack's, so a sandbox card shows at a glance that the words came from here.
+# A pack for a merge-request code host would copy this table.
+[terms]
+ticket = "issue"
+tickets = "issues"
+ticket_ref = "st-<n>"
+change = "merge request"
+changes = "merge requests"
+change_short = "MR"
+changes_short = "MRs"
+
+[space]
+house_review = true
+
+[[requires]]
+name = "git"
+kind = "command"
+check = "command -v git"
+why = "the worktrees are git worktrees of bare origins on this disk"
+# Its own fix (c-688), drawn under the failing check: the sentence, the line to copy, and
+# how you know it worked.
+fix = "Install git. On macOS the command line tools bring it; on Linux, use your package manager."
+command = "xcode-select --install"
+done_when = "`git --version` prints a version, and this check passes on Look again."
+
+# Its own first-run step (c-632): a screen after Where finished work goes, done once git is found.
+[[setup]]
+id = "try"
+title = "Try the sandbox"
+text = "setup/try.md"
+requires = ["git"]

@@ -1,0 +1,4 @@
+[
+  {"pid": 61729, "cwd": "/Users/user/workspace/api", "kind": "interactive", "startedAt": 1789545993072, "sessionId": "51e1bbe7-70bf-43c5-8c4b-6b843de7835f", "name": "cloud-ab", "status": "busy"},
+  {"pid": 96132, "id": "083b13ff", "cwd": "/tmp/probe", "kind": "background", "startedAt": 1789559856823, "sessionId": "083b13ff-f95b-47e3-835c-9456642a2c2c", "name": "keel-probe", "status": "idle", "state": "done"}
+]

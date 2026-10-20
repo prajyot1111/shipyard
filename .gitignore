@@ -1,0 +1,41 @@
+state/
+__pycache__/
+*.pyc
+.lavish/
+.venv/
+# No trailing slash: the deploy worker links the live venv into its tree (keel/deploy.py).
+.venv-voice
+
+# A segment's generated output is never repo content. Every fetcher run rewrites data/
+# and summary.json, so tracking either leaves the checkout dirty on a schedule. These
+# rules land before any segment is copied in, so a fetch pass between the copy and the
+# commit cannot stage one. instamart's inbox/ is the same thing under another name: the
+# app drops uploaded invoice PDFs there and fetch.py reads them.
+segments/*/data/
+segments/*/summary.json
+segments/instamart/inbox/
+
+# The install's own config (c-610 S1): its user's choices and its machine's paths, never
+# repo content. etc/shipyard.example.toml is what the installer copies there.
+/config.toml
+
+# Services are rendered per machine (`keel/service.py`) with that machine's paths, into an
+# install's services/, or a bare checkout's etc/: never repo content.
+etc/*.service
+etc/*.timer
+etc/*.plist
+
+# One owner's own things, which live in that owner's install since c-722: a config an older
+# checkout kept, and the memory and profile it kept before the move.
+/keel.toml
+/talker/memory/
+/identity/
+
+# The personal space's config dir on a machine where it lives inside the checkout (the box
+# had one before c-622). Never repo content: it holds skills that are not Keel's and, on
+# Linux, the login.
+spaces/personal/
+
+# The staging boards the cutover sets aside beside state/ on the box. Runtime data, like
+# state/ itself: never tracked, and never read by the drift guard in `make test`.
+state.staging-*/

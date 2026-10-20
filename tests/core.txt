@@ -1,0 +1,57 @@
+# The core suite (c-646): the test modules that guard Keel's core promises, small and fast.
+# `make test` runs these on every change, with the extended modules the change can reach
+# (`tests/selector.py`); `make test-core` runs these alone; `make test-all` runs every module.
+# Every `tests/test_*.py` not named here is extended. `tests/suites.py` reads this file and
+# `tests/test_suites.py` holds it to the tree: a name here is a module that exists, once.
+# One dotted module per line; `#` starts a comment.
+
+# The board's rules and gates, and the stage moves: who may do what, and what a gate holds.
+tests.test_board
+tests.test_cli
+tests.test_authority
+tests.test_lane_l_guards
+tests.test_live_state
+tests.test_shipping_board
+tests.test_publishable_gate
+tests.test_ending
+tests.test_review_gate
+tests.test_review_stagecheck
+tests.test_tree
+tests.test_worker
+
+# What the drain starts, resumes and refuses, through the harness and the house it launches.
+tests.test_drain
+tests.test_where
+tests.test_drain_login
+tests.test_limits
+tests.test_idleclose
+tests.test_harness
+tests.test_house
+
+# The house fence: what a house, a builder or a flow cannot reach.
+tests.test_board_fence
+tests.test_house_guard
+tests.test_house_bin
+tests.test_research_fence
+tests.test_flowfence
+tests.test_builders
+
+# Relays and taps reaching houses.
+tests.test_relay
+tests.test_fasttaps
+
+# The landing: the merged tree tested, then landed, or refused whole.
+tests.test_merging
+tests.test_landing
+tests.test_integration
+tests.test_nothing_to_land
+
+# The deploy: only his Yes moves main, after the suite.
+tests.test_deploy
+
+# The suite's own guards: the Atlas, the fence, the leak check, the shipped config, this list.
+tests.test_atlas
+tests.test_fence
+tests.test_boardleak
+tests.test_config
+tests.test_suites

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>voice card</title>
+<script>
+  // The dashboard embeds us with ?embed=1&theme=dark&accent=&ink=&tint=, handing every
+  // segment one shared accent instead of each card carrying its own clashing hue. This
+  // runs before the style block so the theme attribute is set before first paint, no
+  // flash of the wrong palette.
+  (function () {
+    var q = new URLSearchParams(location.search);
+    // EMBED, not just the theme: the old view still embeds this card at a hard 184px,
+    // with no query string at all, and is still live. Only the new shell's iframe
+    // fits itself to whatever this page renders, so the two extra rows below are
+    // gated on this flag rather than being the only behaviour this file has.
+    window.__EMBED = q.get("embed") === "1";
+    if (window.__EMBED) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+    var ink = q.get("ink"), tint = q.get("tint");
+    if (ink) document.documentElement.style.setProperty("--accent-ink", ink);
+    if (tint) document.documentElement.style.setProperty("--accent-tint", tint);
+  })();
+</script>
+<style>
+  /* A card has one job: say whether voice is there, and what it would tell you. Tokens
+     are duplicated here on purpose, exactly as every other card duplicates them: a card
+     must render standalone, so it cannot depend on the app's stylesheet.
+
+     AND IT MUST RENDER WITH THE GATEWAY DEAD. `segment-services` asks for that in as
+     many words: a card is a static file, liveness is a fetch inside it that fails to
+     "voice is down", and never a dead link into nothing. */
+  :root{
+    --card:#FFFFFF; --text:#152229; --sub:#576873; --rule:#DBE3E7;
+    --accent-ink:#0B6068; --accent-tint:#E2F1F2;
+    --warn-ink:#8A5A08; --warn-bg:#FBF0DC;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --card:#1D1A17; --text:#F0ECE6; --sub:#C0B7AC; --rule:#2A2622;
+           --accent-ink:#C888DD; --accent-tint:#2C1B32;
+           --warn-ink:#E0C96E; --warn-bg:#2B2712; }
+  }
+  :root[data-theme="dark"]{ --card:#1D1A17; --text:#F0ECE6; --sub:#C0B7AC; --rule:#2A2622;
+    --accent-ink:#C888DD; --accent-tint:#2C1B32; --warn-ink:#E0C96E; --warn-bg:#2B2712; }
+  :root[data-theme="light"]{ --card:#FFFFFF; --text:#152229; --sub:#576873; --rule:#DBE3E7;
+    --accent-ink:#0B6068; --accent-tint:#E2F1F2; --warn-ink:#8A5A08; --warn-bg:#FBF0DC; }
+
+  *{ box-sizing:border-box; }
+  html,body{ background:var(--card); color:var(--text); }
+  body{ margin:0; padding:10px 12px; font-size:13px; line-height:1.4;
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  .top{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--sub); flex:0 0 auto; }
+  .dot.up{ background:var(--accent-ink); }
+  .lbl{ font-weight:700; }
+  .pill{ margin-left:auto; font-size:11px; font-weight:700; padding:2px 8px;
+         border-radius:999px; color:var(--accent-ink); background:var(--accent-tint); }
+  ul{ list-style:none; margin:0; padding:0; }
+  li{ display:flex; gap:8px; align-items:baseline; padding:4px 0;
+      border-top:1px solid var(--rule); }
+  li:first-child{ border-top:0; }
+  .k{ color:var(--sub); }
+  .v{ margin-left:auto; font-weight:600; text-align:right; }
+  .quiet{ color:var(--sub); font-size:11px; }
+  .warn{ color:var(--warn-ink); background:var(--warn-bg); font-size:11px; font-weight:600;
+         padding:4px 7px; border-radius:6px; margin-top:6px; }
+</style></head>
+<body>
+<div id="body" class="quiet">Loading…</div>
+<script>
+(function () {
+  var el = document.getElementById("body");
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function down(why) {
+    el.className = "";
+    el.innerHTML =
+      '<div class="top"><span class="dot"></span><span class="lbl">Voice</span>' +
+      '<span class="pill" style="background:var(--warn-bg);color:var(--warn-ink)">down</span></div>' +
+      '<div class="warn">' + esc(why) + '</div>' +
+      '<div class="quiet" style="margin-top:6px">bin/harbor-voice-gateway status</div>';
+  }
+
+  function uptime(sec) {
+    sec = Math.round(sec);
+    if (sec < 60) return sec + "s";
+    var m = Math.floor(sec / 60), h = Math.floor(m / 60);
+    if (h < 1) return m + "m";
+    return h + "h " + (m % 60) + "m";
+  }
+
+  function up(h) {
+    var rows = [
+      ["listening", h.stt.ready ? h.stt.backend : "no speech model"],
+      ["voice", h.tts.backend]
+    ];
+    if (window.__EMBED) {
+      // The embedded shell's extra room buys two more rows worth reading at a
+      // glance: who is filling the wait, and how long this process has been up.
+      // Both come straight off /voice/health, nothing invented. The old view's
+      // 184px box was measured at exactly the three rows above.
+      rows.push(["wait filler", h.filler.backend], ["up", uptime(h.upSeconds)]);
+    }
+    el.className = "";
+    el.innerHTML =
+      '<div class="top"><span class="dot up"></span><span class="lbl">Voice</span>' +
+      '<span class="pill">up</span></div><ul>' +
+      rows.map(function (r) {
+        return '<li><span class="k">' + esc(r[0]) + '</span>' +
+               '<span class="v">' + esc(r[1]) + '</span></li>';
+      }).join("") + "</ul>" +
+      (h.stt.ready ? "" : '<div class="warn">' + esc(h.stt.why) + "</div>") +
+      (h.snapshot.healthy ? "" :
+        '<div class="warn">the state snapshot is ' + esc(h.snapshot.ageSeconds) +
+        "s old, so every turn goes to Harbor</div>");
+  }
+
+  function poll() {
+    fetch("/voice/health", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(up)
+      .catch(function () { down("the gateway is not answering on 127.0.0.1:4390."); });
+  }
+  poll();
+  setInterval(poll, 15000);
+})();
+</script>
+</body></html>

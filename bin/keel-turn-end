@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""The turn-end half of a house's Stop hook: the record at the outcome gate, the
+discussion flag. Puts the repo root on sys.path and runs keel.ending.main."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.ending import main  # noqa: E402
+
+sys.exit(main())

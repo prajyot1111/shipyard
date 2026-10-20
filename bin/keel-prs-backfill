@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""The one-time fill of options.prs: each card at review or shipping gets its primary
+repo's pull request there from its own options.pr when missing (keel/prsbackfill.py).
+`--dry-run` writes nothing."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.prsbackfill import main  # noqa: E402
+
+sys.exit(main(sys.argv[1:]))

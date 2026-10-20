@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Build the demo sandbox from nothing, or take it away.
+
+    demo/sandbox/setup [--home <dir>] [--port <n>] [--config-dir <dir>]   build it (refused when it exists)
+    demo/sandbox/setup --clean [--home <dir>]          remove it (only a directory it built)
+
+The sandbox (default `~/keel-sandbox`) is a Keel of its own for the demo video: its own
+`keel.toml` (from `keel.toml.in` beside this file), board, port and an empty adapters
+directory, a work space on the sandbox pack (`packs/sandbox/`, the example pack) with two
+tiny repos, `api` and `web`, each cloned from a bare origin on the same disk, the JSON code host and tracker the
+adapter reads, and the week of finished cards (`demo/seed history`) that numbers every later
+card from c-9207, past the live board's. Everything runs against it through `demo/sandbox/run`, which names its toml.
+
+Refused: `KEEL_LIVE_STATE` set, a home inside any Keel checkout or its state, and a port that
+is the live deck's, lavish's or the voice gateway's.
+"""
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+KEEL_HOME = HERE.parent.parent
+MARKER = ".keel-sandbox"
+DEFAULT_HOME = Path("~/keel-sandbox").expanduser()
+DEFAULT_PORT = 8890
+LIVE_PORTS = (8790, 4387, 4390)
+PERSONAL_CONFIG = Path("~/keel/spaces/personal/.claude").expanduser()
+REPOS = ("api", "web")
+
+# Each repo's history: (subject, author, date, the files that commit adds, from app/<repo>/).
+HISTORY = {
+    "api": [("Start the reports api", "Maya Chen", "2026-08-03T10:12:00",
+             ["README.md", "reports/__init__.py", "reports/store.py", "reports/search.py", "reports/app.py"]),
+            ("Add tests for the list and search", "Ines Duarte", "2026-09-05T15:40:00",
+             ["tests/__init__.py", "tests/test_reports.py"])],
+    "web": [("Start the reports page", "Tom Okafor", "2026-08-04T09:30:00",
+             ["README.md", "index.html", "style.css"]),
+            ("Fetch the reports and search them", "Tom Okafor", "2026-08-21T14:05:00",
+             ["reports.js"])],
+}
+
+
+class SetupError(Exception):
+    pass
+
+
+def email_of(name: str) -> str:
+    return name.lower().replace(" ", ".") + "@sandbox.test"
+
+
+def run(argv: list[str], cwd: Path | None = None, env: dict | None = None) -> str:
+    result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, env={**os.environ, **(env or {})})
+    if result.returncode != 0:
+        raise SetupError(f"{' '.join(argv)}: {result.stderr.strip() or result.stdout.strip()}")
+    return result.stdout
+
+
+def refuse(home: Path, port: int) -> None:
+    if os.environ.get("KEEL_LIVE_STATE"):
+        raise SetupError("KEEL_LIVE_STATE is set: the sandbox never runs beside the live board")
+    home = home.resolve()
+    for keel in (Path("~/keel").expanduser().resolve(), KEEL_HOME.resolve()):
+        if home == keel or home.is_relative_to(keel):
+            raise SetupError(f"{home} is inside a Keel checkout ({keel}); the sandbox lives outside every one")
+    taken = [p for p in (port, port - 4403, port - 4400) if p in LIVE_PORTS]
+    if taken:
+        raise SetupError(f"port {port} puts the deck, lavish or voice on a live port ({taken[0]}); pick another")
+
+
+# Every seeded repo ignores what running its code leaves (c-604): without it a house's
+# worktree kept `__pycache__/` as untracked files, and the reap at done keeps a worktree with
+# anything uncommitted, so none was ever reaped.
+GITIGNORE = "__pycache__/\n*.pyc\n"
+
+
+def commit_history(repo: str, work: Path) -> None:
+    run(["git", "init", "--quiet", "--initial-branch=main", str(work)])
+    for number, (subject, author, at, files) in enumerate(HISTORY[repo]):
+        for name in files:
+            target = work / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(HERE / "app" / repo / name, target)
+        if number == 0:
+            (work / ".gitignore").write_text(GITIGNORE)
+            files = [".gitignore", *files]
+        run(["git", "add", *files], cwd=work)
+        env = {"GIT_AUTHOR_NAME": author, "GIT_AUTHOR_EMAIL": email_of(author), "GIT_AUTHOR_DATE": at,
+               "GIT_COMMITTER_NAME": author, "GIT_COMMITTER_EMAIL": email_of(author), "GIT_COMMITTER_DATE": at}
+        run(["git", "commit", "--quiet", "-m", subject], cwd=work, env=env)
+
+
+def make_repo(home: Path, repo: str) -> None:
+    """The repo's history in a scratch tree, pushed into a bare origin, then cloned."""
+    origin = home / "origin" / f"{repo}.git"
+    with tempfile.TemporaryDirectory() as scratch:
+        work = Path(scratch) / repo
+        commit_history(repo, work)
+        run(["git", "clone", "--quiet", "--bare", str(work), str(origin)])
+    clone = home / "repos" / repo
+    run(["git", "clone", "--quiet", str(origin), str(clone)])
+
+
+def write_toml(home: Path, port: int, config_dir: Path = PERSONAL_CONFIG) -> Path:
+    text = (HERE / "keel.toml.in").read_text().format(
+        home=home, keel_home=KEEL_HOME, config_dir=config_dir, port=port,
+        lavish_port=port - 4403, voice_port=port - 4400)
+    path = home / "keel.toml"
+    path.write_text(text)
+    return path
+
+
+def build(home: Path, port: int, config_dir: Path = PERSONAL_CONFIG) -> Path:
+    refuse(home, port)
+    if home.exists():
+        raise SetupError(f"{home} exists; `setup --clean` first")
+    home.mkdir(parents=True)
+    (home / MARKER).write_text(f"built by {HERE / 'setup'}\n")
+    for sub in ("state", "segments", "adapters", "host", "tracker", "projects", "worktrees"):
+        (home / sub).mkdir()
+    for repo in REPOS:
+        make_repo(home, repo)
+        (home / "host" / repo).mkdir()
+    return write_toml(home, port, config_dir)
+
+
+def clean(home: Path) -> None:
+    if not home.exists():
+        return
+    if not (home / MARKER).is_file():
+        raise SetupError(f"{home} has no {MARKER}: it is not a sandbox this script built, so it is left alone")
+    shutil.rmtree(home)
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="demo/sandbox/setup", description=__doc__.split("\n\n")[0])
+    parser.add_argument("--home", type=Path, default=DEFAULT_HOME)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--config-dir", type=Path, default=PERSONAL_CONFIG,
+                        help="the logged-in config dir every sandbox house runs in")
+    parser.add_argument("--clean", action="store_true")
+    args = parser.parse_args(argv)
+    home = args.home.expanduser().absolute()
+    try:
+        if args.clean:
+            clean(home)
+            print(f"removed {home}")
+            return 0
+        toml = build(home, args.port, args.config_dir.expanduser().absolute())
+    except SetupError as error:
+        print(f"setup: {error}", file=sys.stderr)
+        return 1
+    seeded = subprocess.run([sys.executable, str(HERE / "run"), str(HERE.parent / "seed"), "history"],
+                            capture_output=True, text=True, env={**os.environ, "KEEL_SANDBOX": str(home)})
+    if seeded.returncode != 0:
+        print(f"setup: the first cards were not filed: {seeded.stderr.strip()}", file=sys.stderr)
+        return 1
+    print(f"built {home}")
+    print(f"KEEL_CONFIG={toml}")
+    print(f"deck: demo/sandbox/run keel serve  (port {args.port})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

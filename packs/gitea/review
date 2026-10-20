@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""`review scan` and `review <id> poll`: the pull requests that wait on your review, and where
+one review card's stands (c-730, the kit's `review.py`)."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path[:0] = [str(HERE), os.environ.get("KEEL_HOME") or str(HERE.parent.parent), str(HERE.parent.parent)]
+
+from keel.packkit import verbs  # noqa: E402
+
+sys.exit(verbs.run("review", sys.argv[1:], pack=HERE, layer="gt_layer"))

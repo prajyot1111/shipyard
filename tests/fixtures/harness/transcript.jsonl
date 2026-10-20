@@ -1,0 +1,9 @@
+{"type":"user","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","isSidechain":false,"message":{"role":"user","content":"Reply with the single word PONG and then end your turn."}}
+{"type":"assistant","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"PONG"}]}}
+{"type":"system","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","subtype":"stop_hook_summary","hookCount":1}
+{"type":"user","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","isMeta":true,"message":{"role":"user","content":"Stop hook feedback:\nprobe: you stopped early; reply with the word PONG2"}}
+{"type":"assistant","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","isSidechain":true,"message":{"role":"assistant","content":[{"type":"text","text":"subagent chatter, never the house's own words"}]}}
+not json at all
+{"type":"assistant","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"true"}},{"type":"text","text":"Ran the check.\nIt passed."}]}}
+{"type":"assistant","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"PONG2"}]}}
+{"type":"cost-state","sessionId":"083b13ff-f95b-47e3-835c-9456642a2c2c","totalCostUSD":0.01}

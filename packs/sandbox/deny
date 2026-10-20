@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""`deny`: the sandbox adapter's verb (sb_main.py says what each prints)."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import sb_main  # noqa: E402
+
+sys.exit(sb_main.run("deny", sys.argv[1:]))

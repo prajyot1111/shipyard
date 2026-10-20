@@ -1,0 +1,172 @@
+/* The PERSONAL space's theme, for every surface a house writes: a plan, a report, a mockup.
+ *
+ * MIRRORS `app/ui.css`: the geometry on its `:root` and the whole `html[data-mode="personal"]`
+ * palette block, token for token. A colour changed in one is changed in the other, and
+ * `tests/test_theme.py` compares the two files and fails when they drift.
+ *
+ * Nothing links this from the deck. `keel/house.py` copies the space's file into
+ * `state/cards/<id>/theme.css` when the house starts, and the surface links it from beside
+ * itself with `<link rel="stylesheet" href="theme.css">`: lavish serves a local asset from
+ * the HTML's own directory, by a relative path, never a leading slash.
+ *
+ * It is dark, it paints the page surface itself, and it styles plain semantic HTML
+ * (headings, paragraphs, tables, lists, code) plus `.panel`, `.tile`, `.pill` and `.grid`,
+ * so a plan reads as the deck does with no Tailwind and no DaisyUI.
+ *
+ * The budgets are the deck's: four type sizes (15, 13, 11, 10), two weights (400, 600), a
+ * 4px grid, square corners on anything boxed, soft only on pills. No shadows: depth is the
+ * surface ladder (canvas, s1, s2, s3) plus hairlines. Machine values are monospace, human
+ * text is not. A colour means what it means on the deck: accent is you, warn is running
+ * elsewhere, crit is broken, good is healthy or landed.
+ */
+
+:root{
+  --canvas:#161412; --s1:#1D1A17; --s2:#24211D; --s3:#2E2A25;
+  --hair:#2A2622; --hair-hi:#3A352F;
+  --ink:#F0ECE6; --ink-2:#C0B7AC; --ink-3:#92897E;
+  --accent:#D9A468; --accent-ink:#EABF8C; --accent-soft:#302517;
+  /* The statuses sit OFF the accent's warm axis on purpose: on the warm palette they all
+     cleared 4.5:1 and all still read as mud, because the contrast that was missing was
+     chromatic rather than luminous. */
+  --crit:#F08F92; --crit-soft:#301A1B; --warn:#E0C96E; --warn-soft:#2B2712; --good:#A0CE8C;
+  --good-soft:#1C2417;
+  --on-accent:#1A1208;
+  --glow:rgba(217,164,104,.14);
+  --t-task:#D9A468; --t-plan:#8CBEE8; --t-output:#C0A6EE;
+  --t-context:#A0CE8C; --t-session:#E0C96E; --t-review:#F08F92;
+}
+
+/* ===== shared: byte for byte the same in theme-work.css and theme-personal.css ===== */
+
+:root{
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;
+  --r:0; --pill:20px; --pad:12px; --grid:8px; --measure:76ch;
+}
+
+*,*::before,*::after{box-sizing:border-box;min-width:0}
+
+html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink)}
+body{font-family:var(--sans);font-size:13px;font-weight:400;line-height:1.55;
+  letter-spacing:-.005em;max-width:960px;margin:0 auto;padding:32px 16px 64px;
+  -webkit-text-size-adjust:100%}
+::selection{background:var(--accent-soft);color:var(--ink)}
+:focus-visible{outline:1px solid var(--accent);outline-offset:1px}
+
+/* ---------- headings: four treatments inside two sizes and two weights ---------- */
+h1,h2,h3,h4,h5,h6{margin:0;font-weight:600;color:var(--ink)}
+h1{font-size:15px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;
+  padding-bottom:12px;border-bottom:1px solid var(--hair);margin-bottom:24px}
+h1::before{content:"";width:8px;height:8px;flex:0 0 auto;background:var(--accent);
+  box-shadow:0 0 0 3px var(--glow)}
+h2{font-size:15px;letter-spacing:-.02em;margin:32px 0 12px;padding-left:12px;
+  box-shadow:inset 2px 0 0 var(--accent)}
+h3{font-size:13px;margin:24px 0 8px}
+h4,h5,h6{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2);margin:20px 0 8px}
+h1+*,h2+*,h3+*,h4+*{margin-top:0}
+
+/* ---------- copy ---------- */
+p{margin:0 0 12px;max-width:var(--measure)}
+a{color:var(--accent-ink);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+strong,b{font-weight:600;color:var(--ink)}
+em,i{font-style:italic}
+small{font-size:11px;color:var(--ink-2)}
+hr{border:0;border-top:1px solid var(--hair);margin:24px 0}
+
+ul,ol{margin:0 0 12px;padding-left:20px;max-width:var(--measure)}
+ul{list-style:disc}
+li{margin:0 0 4px}
+li>ul,li>ol{margin:4px 0 0}
+ul li::marker{color:var(--accent)}
+ol li::marker{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+dl{margin:0 0 12px}
+dt{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-2);margin-top:8px}
+dd{margin:0 0 4px}
+
+blockquote{margin:0 0 16px;padding:8px 12px;background:var(--s1);color:var(--ink-2);
+  box-shadow:inset 2px 0 0 var(--hair-hi);max-width:var(--measure)}
+blockquote>:last-child{margin-bottom:0}
+
+/* ---------- machine text ---------- */
+code,kbd,samp{font-family:var(--mono);font-size:11px;color:var(--ink);background:var(--s2);
+  border:1px solid var(--hair);border-radius:var(--r);padding:0 4px;
+  overflow-wrap:anywhere}
+pre{margin:0 0 16px;padding:12px;background:var(--s1);border:1px solid var(--hair);
+  border-radius:var(--r);overflow-x:auto;font-family:var(--mono);font-size:11px;
+  line-height:1.6;color:var(--ink)}
+pre code{background:none;border:0;padding:0;font-size:inherit;white-space:pre;
+  overflow-wrap:normal}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:13px}
+table,thead,tbody,tfoot,tr,th,td{color:inherit}
+caption{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-2);text-align:left;padding-bottom:8px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px;border-bottom:1px solid var(--hair)}
+th{font-family:var(--mono);font-size:11px;font-weight:400;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2);border-bottom-color:var(--hair-hi)}
+tbody tr:last-child td{border-bottom:0}
+
+/* ---------- the four boxes a surface needs ---------- */
+.panel{background:var(--s1);border:1px solid var(--hair);border-radius:var(--r);
+  padding:var(--pad);margin:0 0 16px}
+.panel>:first-child{margin-top:0}
+.panel>:last-child{margin-bottom:0}
+.panel.flag{border-color:var(--accent)}
+.panel.good{border-color:var(--good)}
+.panel.warn{border-color:var(--warn)}
+.panel.crit{border-color:var(--crit)}
+
+.tile{background:var(--s1);border:1px solid var(--hair);border-radius:var(--r);
+  padding:var(--pad);display:flex;flex-direction:column;gap:4px}
+.tile .n{font-size:15px;font-weight:600;color:var(--ink)}
+.tile .l{font-size:13px;color:var(--ink-2)}
+.tile .s{font-size:11px;color:var(--ink-2)}
+.tile.flag{border-color:var(--accent)} .tile.flag .n{color:var(--accent-ink)}
+.tile.good{border-color:var(--good)} .tile.good .n{color:var(--good)}
+.tile.warn{border-color:var(--warn)} .tile.warn .n{color:var(--warn)}
+.tile.crit{border-color:var(--crit)} .tile.crit .n{color:var(--crit)}
+
+.pill{display:inline-flex;align-items:center;gap:8px;height:24px;padding:0 12px;
+  border-radius:var(--pill);background:var(--s2);border:1px solid var(--hair);
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.pill.accent{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.pill.good{background:var(--good-soft);border-color:var(--good);color:var(--good)}
+.pill.warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.pill.crit{background:var(--crit-soft);border-color:var(--crit);color:var(--crit)}
+
+.grid{display:grid;gap:var(--grid);margin:0 0 16px;
+  grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+.grid>*{min-width:0}
+
+/* ---------- the few utilities the deck's own page uses ---------- */
+.label{font-family:var(--mono);font-size:11px;font-weight:400;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2)}
+.lbl10{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2)}
+.mono{font-family:var(--mono)}
+.muted{color:var(--ink-2)}
+.accent{color:var(--accent-ink)}
+.good{color:var(--good)}
+.warn{color:var(--warn)}
+.crit{color:var(--crit)}
+.mark{width:8px;height:8px;flex:0 0 auto;display:inline-block;background:var(--accent);
+  box-shadow:0 0 0 3px var(--glow)}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+
+img,svg,video,canvas{max-width:100%;height:auto}
+img{display:block;border:1px solid var(--hair);border-radius:var(--r)}
+figure{margin:0 0 16px}
+figcaption{font-size:11px;color:var(--ink-2);margin-top:4px}
+
+/* ---------- the phone: 16px gutters, and a wide table scrolls inside itself ---------- */
+@media (max-width:720px){
+  body{padding:24px 16px 48px}
+  h2{margin-top:24px}
+  table{display:block;overflow-x:auto}
+  .grid{grid-template-columns:1fr}
+}

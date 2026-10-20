@@ -1,0 +1,32 @@
+Shipyard
+Copyright 2026 Prajyot Kumar Garabadu
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It bundles the following third-party works, each under its own license. The code is
+bundled as its authors published it; the music was changed, as its entry says.
+
+highlight.js 11.11.1
+  app/vendor/highlight/
+  BSD 3-Clause License. Copyright (c) 2006, Ivan Sagalaev.
+  The license text is app/vendor/highlight/LICENSE.
+  Unmodified: the minified core and seven language files of the published build.
+
+elkjs 0.9.3 (the Eclipse Layout Kernel, compiled to JavaScript)
+  app/vendor/elk.bundled.js
+  Eclipse Public License 2.0 (https://www.eclipse.org/legal/epl-2.0/).
+  Source: https://github.com/kieler/elkjs
+  Unmodified.
+
+"The space is big", by Komiku
+  demo/music/the-space-is-big.mp3
+  CC0 1.0 Universal, a public domain dedication. Credited in demo/music/CREDITS.md.
+  Modified: re-encoded to 128 kbps MP3, with its tags and cover picture removed.
+  Not in the public release, which leaves demo/music and demo/video out.
+
+How each vendored file was obtained, and how to move it to another version, is in
+app/vendor/README.md.
+
+Not bundled: the demo video under demo/video (not in the public release) is built with
+Remotion, which is fetched by npm when that build is run and carries its own license terms.
+Read them before you build the video for a company.

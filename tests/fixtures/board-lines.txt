@@ -1,0 +1,90 @@
+# The board grammar, as a fixture both sides are run over.
+#
+# `keel/boards.py` decides what may be written and `app/ui.board.js` parses the same lines
+# to render them, so the two have to agree about what a line MEANS or the deck draws
+# something the record does not say. tests/test_boards.py runs Python over every row here
+# and, when node is on the machine, the deck's parser over the same rows.
+#
+# One row per line: the verdict, a tab, then the line exactly as an agent would send it.
+# OK   the line parses (what it then DOES is judged against the board it lands on, which
+#       is the server's half alone and is tested in tests/test_boards.py, not here)
+# BAD  the line does not parse, so it is skipped with a reason
+#
+# This file is the grammar's only fixture. A new op goes in here first.
+
+OK	board "How Keel is laid out"
+OK	board new "The second picture"
+OK	board rename "What it should have been called"
+OK	group box "The box (Oracle VPS)"
+OK	node phone phone "His phone"
+OK	node mac laptop "The Mac" in home
+OK	node mac laptop "The Mac" in home "work houses"
+OK	node deck server "keel serve" "the deck and the board"
+OK	node odd wombat "an unknown icon falls back to box"
+OK	edge phone -> voice
+OK	edge phone -> voice "speech, tailnet"
+OK	edge deck <-> mac "the door, 22 ms"
+OK	edge a -- b "just connected"
+OK	mark mac accent
+OK	mark mac crit
+OK	note board "The agent says **what** exists. The board decides `where` it goes."
+OK	note deck "one note, hanging on a node"
+OK	step board "You stop talking, the detector waits 2.5 s"
+OK	step deck "the step that belongs to this node"
+OK	table board "Where the time goes"
+OK	table deck "what this one costs"
+OK	cols Part | Today | After
+OK	row Process start | 3.6 s | hidden at connect
+OK	code deck "keel/converse.py"
+OK	lang python
+OK	line "def take_turn(cfg, board, card, said):"
+OK	path board "state/cards/c-420/probe.py" size "2 KB" from house
+OK	path deck "probe.py" size "2 KB" from talker
+OK	  node spaced laptop "leading space is fine"
+OK	# a comment is not an op and is not an error
+OK	```
+OK	```board
+OK
+
+BAD	board How Keel is laid out
+BAD	board
+BAD	board "one" "two"
+BAD	board new
+BAD	board new unquoted
+BAD	board rename
+BAD	board rename unquoted
+BAD	board renamed "not a mode"
+BAD	frame graph "frames are gone"
+BAD	frame
+BAD	text "text is gone too"
+BAD	group box
+BAD	group "box" "the id is not quoted"
+BAD	node phone phone
+BAD	node phone "phone" "the icon is not quoted"
+BAD	node mac laptop "The Mac" inside home
+BAD	node mac laptop "The Mac" in
+BAD	node mac laptop "The Mac" in home extra
+BAD	edge phone voice
+BAD	edge phone => voice
+BAD	edge phone -> voice unquoted
+BAD	edge phone -> voice "a" "b"
+BAD	mark mac
+BAD	mark mac shiny
+BAD	note "the place is not quoted" "text"
+BAD	note board
+BAD	note board unquoted
+BAD	step "you stop talking"
+BAD	step board
+BAD	table board
+BAD	table "board" "the place is not quoted"
+BAD	code board
+BAD	cols
+BAD	row
+BAD	lang "python"
+BAD	line def f():
+BAD	line
+BAD	path "probe.py" size "2 KB" from house
+BAD	path board "probe.py" from house
+BAD	path board "probe.py" size "2 KB" by house
+BAD	draw "not an op at all"
+BAD	node phone phone "an unclosed quote

@@ -1,0 +1,312 @@
+/* Voice, the page's own sheet, on top of the deck's /ui.css (its palettes, its reset) and
+   /ui.plan.css (the board embed). Every class here is `v-` so nothing collides with the
+   deck's names.
+
+   BUDGETS (the design spec, decision VP-6): four type sizes, 11/13/15/20 (--f1..--f4), and
+   16px only on the phone's text field, which is iOS's zoom floor and not a fifth size (the
+   deck makes the same exception, ui.css .saybox); two weights, 400 and 600; every space,
+   radius and size a multiple of 4, hairlines 1px; tap targets 44px; square corners except
+   the pills and the voice bar and its composer, the one soft shape a thumb finds; no
+   shadows. The board embed is the deck's own rendering and keeps the deck's sizes. */
+
+:root{
+  --f1:11px; --f2:13px; --f3:15px; --f4:20px;
+  /* The deck's two accents (ui.css html[data-mode]), so a card id wears its own space's
+     colour whichever space the page is painted in. */
+  --acc-work:#5BD6C0; --acc-personal:#D9A468; --acc-console:#A59BFF;
+  --bar-h:88px; --bar-r:44px;
+}
+[data-space="work"]{color:var(--acc-work)}
+[data-space="personal"]{color:var(--acc-personal)}
+[data-space="console"]{color:var(--acc-console)}
+
+body{flex-direction:column;height:100dvh;overflow:hidden;font-size:var(--f2)}
+
+/* THE PAGE LAYS OUT ITS OWN CHILDREN AND NOTHING ELSE (c-310): a node something else
+   injected at body level is taken out of flow and down to nothing. No !important, so an
+   extension that positions its own widget with an inline style keeps working. */
+body > *:not(.v-top, .v-rail, .v-chat, .v-touched, .v-sheet, script){
+  position:absolute; width:0; height:0; overflow:hidden; pointer-events:none;
+}
+
+.mono{font-family:var(--mono)}
+.crit{color:var(--crit)}
+
+/* ------------------------------------------------------------ header */
+
+.v-top{flex:0 0 auto;display:flex;align-items:center;gap:4px;
+  height:calc(56px + env(safe-area-inset-top, 0px));padding:env(safe-area-inset-top, 0px) 8px 0}
+.v-back{position:relative;display:flex;align-items:center;justify-content:center;
+  width:44px;height:44px;flex:0 0 44px;color:var(--ink);font-size:var(--f4);text-decoration:none}
+.v-back:hover{text-decoration:none}
+.v-back-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--crit)}
+.v-title{display:none;font-size:var(--f3);font-weight:600}
+.v-who{display:flex;align-items:center;gap:8px;min-width:0;height:44px;padding:0 4px}
+/* Harbor's mark, the lighthouse (c-518), wherever Harbor is the one he talks to: the header
+   and the first row of "Talk to". No tile: the bare glyph masks the accent the square it
+   replaced was painted in. The deck serves it; this page is same origin. */
+.v-who-dot{width:20px;height:20px;flex:0 0 20px;background:var(--accent);
+  -webkit-mask:url(/icons/harbor-glyph.svg) center/contain no-repeat;mask:url(/icons/harbor-glyph.svg) center/contain no-repeat}
+.v-who-id{flex:0 0 auto;font-size:var(--f2);font-weight:600}
+.v-who-name{font-size:var(--f3);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.v-who.pinned .v-who-name{font-size:var(--f2);font-weight:400;color:var(--ink-2);text-overflow:clip;
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent);
+  mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}
+.v-ring{--left:360deg;position:relative;width:20px;height:20px;flex:0 0 20px;border-radius:50%;
+  background:conic-gradient(var(--accent) 0 var(--left),var(--hair-hi) var(--left) 360deg)}
+.v-ring::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--canvas)}
+.v-chips,.v-deck{display:none}
+.v-rec{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  width:44px;height:44px;flex:0 0 44px;text-align:center}
+.v-rec[hidden]{display:none}
+.v-rec-dot{width:4px;height:4px;background:var(--crit)}
+.v-rec-word{font-size:var(--f1);font-weight:600;color:var(--crit);line-height:1}
+.v-icon{width:44px;height:44px;flex:0 0 44px;text-align:center;font-size:var(--f4);letter-spacing:2px;color:var(--ink)}
+
+/* ------------------------------------------------------------ columns */
+
+.v-rail,.v-touched{display:none}
+.v-chat{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.v-h{font-family:var(--mono);font-size:var(--f1);font-weight:400;color:var(--ink-2);
+  text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px}
+
+/* ------------------------------------------------------------ the chat */
+
+.v-stage{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;padding:16px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 32px);
+  mask-image:linear-gradient(to bottom,transparent,#000 32px)}
+.v-empty{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:16px}
+.v-empty[hidden]{display:none}
+.v-empty-lead{font-size:var(--f3);color:var(--ink)}
+.v-empty-list{font-size:var(--f2);color:var(--ink-3)}
+.v-turns{margin-top:auto;display:flex;flex-direction:column;gap:24px}
+.v-empty:not([hidden]) + .v-turns{margin-top:0}
+.v-turn{display:flex;flex-direction:column;gap:8px}
+.v-tbody{display:flex;flex-direction:column;gap:8px}
+.v-tboards{display:flex;flex-direction:column;gap:8px}
+.v-tboards:empty{display:none}
+.v-said{font-size:var(--f2);color:var(--ink-2)}
+.v-mark{display:inline-block;margin-left:8px;padding:0 4px;border:1px solid var(--hair-hi);
+  font-size:var(--f1);color:var(--ink-3);vertical-align:1px;line-height:16px}
+.v-heard{font-size:var(--f1);color:var(--ink-3)}
+.v-answer{font-size:var(--f3);color:var(--ink-2);line-height:1.4;white-space:pre-wrap}
+.v-answer.held{color:var(--ink-3)}
+.v-failed{color:var(--crit)}
+.v-redirect{font-size:var(--f3);color:var(--ink-2)}
+.v-heldnote{font-size:var(--f1);color:var(--ink-3)}
+.v-prov{display:flex;align-items:center;font-size:var(--f1);color:var(--ink-3);text-align:left}
+button.v-prov{min-height:44px;margin:-12px 0}
+.v-narr{font-size:var(--f1);color:var(--ink-3);border-left:1px solid var(--hair-hi);padding-left:12px;
+  display:flex;flex-direction:column;gap:4px}
+.v-err{font-size:var(--f1);color:var(--crit)}
+.v-link{min-height:44px;color:var(--accent-ink);font-size:var(--f2);align-self:flex-start}
+.v-live-line{display:flex;align-items:center;gap:8px;font-size:var(--f3);color:var(--ink-2)}
+.v-dots{display:inline-flex;gap:4px}
+.v-dots i{width:4px;height:4px;background:var(--ink-2);animation:v-dot 1.2s infinite}
+.v-dots i:nth-child(2){animation-delay:.2s}
+.v-dots i:nth-child(3){animation-delay:.4s}
+@keyframes v-dot{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.v-filler{font-size:var(--f1);color:var(--ink-3);font-style:italic}
+
+/* THE LATEST EXCHANGE IS BIG on the phone, readable while walking; the rest is quieter. */
+.v-turn.latest .v-said{font-size:var(--f3)}
+.v-turn.latest .v-answer{font-size:var(--f4);color:var(--ink)}
+.v-turn.latest .v-answer.held{color:var(--ink-3)}
+.v-turn:not(.latest){opacity:.72}
+
+/* the receipts: a board, a capture, one tap from the deck */
+.v-receipt{display:flex;align-items:center;gap:16px;min-height:56px;padding:8px 16px;
+  background:var(--s1);border:1px solid var(--hair);color:var(--ink);text-decoration:none}
+.v-receipt:hover{text-decoration:none;border-color:var(--hair-hi)}
+.v-ricon{position:relative;width:24px;height:24px;flex:0 0 24px;background:var(--s3)}
+.v-ricon::after{content:"";position:absolute;inset:8px;background:var(--ink-3)}
+.v-ricon-board::after{inset:4px 8px;background:transparent;border:1px solid var(--ink-3)}
+.v-rtext{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
+.v-rtitle{font-size:var(--f2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v-rmeta{font-size:var(--f1);color:var(--ink-3)}
+.v-rmeta:empty{display:none}
+.v-rchev{flex:0 0 auto;color:var(--ink-3);font-size:var(--f3)}
+.v-embed{margin:0}
+.v-embed .pdia{gap:8px}
+
+/* ------------------------------------------------------------ the dock */
+
+.v-dock{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;
+  padding:8px 16px calc(16px + env(safe-area-inset-bottom, 0px))}
+.v-note{font-size:var(--f1);color:var(--ink-3);text-align:center;padding:0 16px}
+.v-note.crit{color:var(--crit)}
+.v-pills{display:flex;justify-content:center;gap:8px}
+.v-pills[hidden],.v-pill[hidden]{display:none}
+.v-pill{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:var(--pill);
+  border:1px solid var(--hair-hi);font-size:var(--f2);font-weight:600;color:var(--ink-2)}
+.v-conv{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.v-live{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:v-live 2s ease-in-out infinite}
+@keyframes v-live{50%{opacity:.4}}
+.v-armed{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+
+/* THE COMPOSER: the field, the + menu and the mic, in the bar's own capsule */
+.v-compose{position:relative;display:flex;align-items:flex-end;gap:8px;min-height:64px;padding:8px;
+  border-radius:32px;background:var(--s2);border:1px solid var(--hair-hi)}
+.v-compose[hidden]{display:none}
+.v-plus{width:48px;height:48px;flex:0 0 48px;border-radius:50%;text-align:center;
+  font-size:var(--f4);color:var(--ink-2)}
+.v-plus[aria-expanded="true"]{background:var(--s3);color:var(--ink)}
+.v-field{flex:1 1 auto;min-width:0;height:48px;min-height:48px;max-height:116px;padding:12px 4px;
+  background:transparent;border:0;border-radius:0;resize:none;font-size:16px;line-height:24px;color:var(--ink)}
+.v-field:focus{outline:none}
+.v-send{height:48px;padding:0 16px;flex:0 0 auto;border-radius:24px;background:var(--accent);
+  color:var(--on-accent);font-weight:600}
+.v-send[hidden],.v-mic[hidden]{display:none}
+.v-mic{position:relative;width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:var(--accent);
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* the microphone glyph, drawn: a capsule, a cup and a stem */
+.v-mic-glyph{position:absolute;left:20px;top:12px;width:8px;height:16px;border-radius:4px;background:var(--on-accent)}
+.v-mic-glyph::before{content:"";position:absolute;left:-4px;top:8px;width:16px;height:12px;
+  border:2px solid var(--on-accent);border-top:0;border-radius:0 0 8px 8px}
+.v-mic-glyph::after{content:"";position:absolute;left:3px;top:20px;width:2px;height:4px;background:var(--on-accent)}
+.v-menu{position:absolute;left:0;bottom:calc(100% + 8px);width:min(100%, 320px);z-index:5;
+  display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--hair-hi)}
+.v-menu[hidden]{display:none}
+.v-mitem{display:flex;flex-direction:column;gap:4px;min-height:56px;padding:8px 16px;border-bottom:1px solid var(--hair)}
+.v-mitem:last-child{border-bottom:0}
+.v-mitem:disabled{opacity:.5;cursor:default}
+.v-mname{font-size:var(--f2);font-weight:600}
+.v-mdesc{font-size:var(--f1);color:var(--ink-2)}
+
+/* THE VOICE BAR: both the control and the state, and its label says what the next touch
+   does. Its waveform comes from voice.wave.js. */
+.v-bar{position:relative;display:flex;align-items:stretch;height:var(--bar-h);border-radius:var(--bar-r);
+  background:var(--s2);border:1px solid var(--hair-hi);overflow:hidden}
+.v-bar[hidden]{display:none}
+.v-kbd{position:relative;width:44px;height:44px;flex:0 0 44px;margin:auto 0 auto 16px;border-radius:50%;
+  background:var(--s3)}
+/* the keyboard glyph: a key row, drawn */
+.v-kbd-glyph{position:absolute;left:12px;top:16px;width:20px;height:12px;border:2px solid var(--ink-2)}
+.v-kbd-glyph::after{content:"";position:absolute;left:4px;bottom:2px;width:8px;height:2px;background:var(--ink-2)}
+.v-barhit{flex:1 1 auto;min-width:0;display:flex;align-items:stretch;touch-action:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.v-barchip{display:flex;align-items:center;justify-content:center;width:88px;flex:0 0 88px;
+  border-right:1px solid var(--hair-hi);font-size:var(--f2);font-weight:600}
+.v-barchip[hidden]{display:none}
+.v-barmain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;padding:8px 16px 8px 8px}
+.v-wave{display:flex;align-items:center;justify-content:center;gap:4px;height:32px;width:252px;max-width:100%;overflow:hidden}
+.v-wbar{width:4px;height:4px;flex:0 0 4px;background:var(--ink-3)}
+.v-barrow{display:flex;align-items:baseline;justify-content:center;gap:8px;min-width:0}
+.v-barlabel{font-size:var(--f3);font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v-barmeta{font-size:var(--f1);color:var(--ink-3)}
+.v-barmeta:empty{display:none}
+.v-barsub{font-size:var(--f1);color:var(--ink-3)}
+.v-barsub[hidden]{display:none}
+.v-bar[data-bar="listening"],.v-bar[data-bar="opening"]{background:var(--accent-soft);border-color:var(--accent)}
+.v-bar[data-bar="listening"] .v-wbar,.v-bar[data-bar="opening"] .v-wbar{background:var(--accent)}
+.v-bar[data-bar="speaking"] .v-wbar{background:var(--accent-ink)}
+.v-bar[data-bar="thinking"] .v-wbar.lit,.v-bar[data-bar="partial"] .v-wbar.lit{background:var(--accent-ink)}
+.v-bar[data-armed="capture"]{background:var(--warn-soft);border-color:var(--warn)}
+.v-bar[data-armed="capture"] .v-wbar{background:var(--warn)}
+.v-bar[data-bar="paused"] .v-wbar,.v-bar[data-bar="stalled"] .v-wbar{background:var(--ink-3)}
+.v-bar[data-bar="stalled"]{border-color:var(--warn)}
+.v-bar[data-bar="stalled"] .v-barlabel{color:var(--warn)}
+.v-bar[data-bar="down"]{background:var(--crit-soft);border-color:var(--crit)}
+.v-bar[data-bar="down"] .v-wbar{background:var(--crit)}
+.v-bar[data-bar="down"] .v-barlabel{color:var(--crit)}
+
+/* ------------------------------------------------------------ the sheet */
+
+.v-sheet{margin:auto 0 0;width:100%;max-width:100%;max-height:72dvh;padding:0;border:0;
+  border-top:1px solid var(--hair-hi);background:var(--s1);color:var(--ink)}
+.v-sheet::backdrop{background:rgba(0,0,0,.4)}
+.v-sheethead{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;height:56px;background:var(--s1);border-bottom:1px solid var(--hair)}
+.v-sheethead strong{font-size:var(--f3);font-weight:600}
+.v-done{min-height:44px;padding:0 16px;color:var(--accent-ink);font-weight:600}
+.v-done:focus:not(:focus-visible){outline:none}
+.v-sheetbody{padding:0 16px 24px}
+.v-sheetbody h2{font-size:var(--f2);font-weight:600;color:var(--ink-2);margin:24px 0 8px}
+.v-srow{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:44px;
+  padding:8px 0;border-bottom:1px solid var(--hair)}
+.v-srow dt{color:var(--ink-2);flex:0 0 auto}
+.v-srow dd{text-align:right;min-width:0;overflow-wrap:anywhere}
+.v-sturn{display:flex;flex-direction:column;gap:4px;padding:12px 0;border-bottom:1px solid var(--hair)}
+.v-sanswer{color:var(--ink)}
+.v-snote{font-size:var(--f2);color:var(--ink-2);line-height:1.5}
+
+/* ------------------------------------------------------------ the desk */
+
+@media (min-width:900px){
+  :root{--bar-h:64px; --bar-r:32px}
+  body{display:grid;grid-template-columns:280px minmax(0,1fr) 440px;
+    grid-template-rows:56px minmax(0,1fr);
+    grid-template-areas:"top top top" "rail chat touched"}
+  .v-top{grid-area:top;height:56px;padding:0 16px;gap:8px;border-bottom:1px solid var(--hair)}
+  .v-rail{grid-area:rail}
+  .v-chat{grid-area:chat}
+  .v-touched{grid-area:touched}
+  .v-back{display:none}
+  .v-title{display:block}
+  .v-who{height:36px;padding:0 12px;background:var(--s2);border:1px solid var(--hair-hi)}
+  .v-chips{display:flex;gap:8px}
+  .v-chip{display:inline-flex;align-items:center;height:28px;padding:0 8px;border:1px solid var(--hair-hi);
+    font-size:var(--f1);color:var(--ink-2)}
+  .v-chip.crit{color:var(--crit);border-color:var(--crit)}
+  .v-chip.warn{color:var(--warn);border-color:var(--warn)}
+  .v-chip a{color:inherit}
+  .v-deck{display:inline-flex;align-items:center;height:36px;padding:0 8px;color:var(--ink);font-size:var(--f2)}
+  .v-rec{display:none}
+
+  .v-rail{display:flex;flex-direction:column;min-height:0;overflow-y:auto;padding:0 16px 16px;
+    background:var(--s1);border-right:1px solid var(--hair)}
+  .v-talkto,.v-session{display:flex;flex-direction:column}
+  .v-trow{display:flex;align-items:center;gap:8px;width:100%;height:56px;padding:0 12px;
+    border-bottom:1px solid var(--hair)}
+  .v-trow:hover{background:var(--s2)}
+  .v-trow.on{background:var(--s2);box-shadow:inset 2px 0 0 var(--accent)}
+  .v-tid{flex:0 0 auto;font-size:var(--f2)}
+  .v-tname{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .v-trow.on .v-tname{font-weight:600}
+  .v-tstate{flex:0 0 auto;font-size:var(--f1);color:var(--ink-3)}
+  .v-tnone{padding:8px 12px;font-size:var(--f2);color:var(--ink-3)}
+  .v-session li{padding:4px 12px;font-size:var(--f2)}
+  .v-session a{color:var(--ink-2)}
+  .v-keys{margin-top:auto;padding-top:16px;font-size:var(--f1);color:var(--ink-3)}
+
+  .v-stage{padding:24px max(24px, calc((100% - 720px) / 2))}
+  .v-dock{padding:8px max(24px, calc((100% - 720px) / 2)) 24px}
+  .v-turn .v-said,.v-turn.latest .v-said{font-size:var(--f2)}
+  .v-turn .v-answer,.v-turn.latest .v-answer{font-size:var(--f3);color:var(--ink)}
+  .v-turn:not(.latest){opacity:1}
+  .v-turn:not(.latest) .v-answer{color:var(--ink-2)}
+  .v-field{font-size:var(--f3)}
+  .v-compose{min-height:64px}
+  .v-barmain{flex-direction:row;gap:16px;padding:0 24px 0 8px}
+  .v-barsub{display:none}
+  .v-embed{display:none}
+  .v-touched .v-embed{display:block}
+
+  .v-touched{display:block;min-height:0;overflow-y:auto;padding:0 16px 16px;border-left:1px solid var(--hair)}
+  .v-card{display:flex;flex-direction:column;gap:8px;padding:16px;background:var(--s1);border:1px solid var(--hair)}
+  .v-card-head{display:flex;gap:8px;align-items:baseline;font-size:var(--f3);font-weight:600}
+  .v-card-meta{font-size:var(--f1);color:var(--ink-3)}
+  .v-card-plan{font-size:var(--f2);color:var(--ink-2)}
+  .v-card-links{display:flex;gap:8px;flex-wrap:wrap}
+  .v-btn{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid var(--hair-hi);
+    color:var(--ink);font-size:var(--f2)}
+  .v-btn:hover{text-decoration:none;background:var(--s2)}
+
+  .v-sheet{margin:auto;width:560px;max-height:80dvh;border:1px solid var(--hair-hi)}
+}
+
+/* HOUSES IN THEIR OWN COLOUR: a card id wears its space. */
+body[data-house] .v-who-id,body[data-house] .v-barchip{color:var(--accent)}
+body[data-house="work"] .v-who-id,body[data-house="work"] .v-barchip{color:var(--acc-work)}
+body[data-house="personal"] .v-who-id,body[data-house="personal"] .v-barchip{color:var(--acc-personal)}
+body[data-house="work"] .v-ring{background:conic-gradient(var(--acc-work) 0 var(--left),var(--hair-hi) var(--left) 360deg)}
+body[data-house="personal"] .v-ring{background:conic-gradient(var(--acc-personal) 0 var(--left),var(--hair-hi) var(--left) 360deg)}
+/* Bosun (c-523) wears the console's iris, the Console page's own accent. */
+body[data-house="console"] .v-who-id,body[data-house="console"] .v-barchip{color:var(--acc-console)}
+body[data-house="console"] .v-ring{background:conic-gradient(var(--acc-console) 0 var(--left),var(--hair-hi) var(--left) 360deg)}
+
+/* REDUCED MOTION: nothing moves on its own; the waveform draws each state still. */
+@media (prefers-reduced-motion: reduce){
+  .v-dots i,.v-live{animation:none}
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Put a converted plan and outcome on a real card: push or reuse its boards, rewrite the
+ids, lint, keep the old files, point the card at the new plan (keel/planinstall.py)."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.planinstall import main  # noqa: E402
+
+sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""The repo's pre-receive hook: a push through Bosun's gate moves `next` forward and its own
+`bosun/*` branches, nothing else (`keel/gitgate.py`). Any other push passes untouched."""
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel import gitgate  # noqa: E402
+
+if not gitgate.gated():
+    sys.exit(0)
+
+
+def is_ancestor(old: str, new: str) -> bool:
+    return subprocess.run(["git", "merge-base", "--is-ancestor", old, new]).returncode == 0
+
+
+said = gitgate.refusals(sys.stdin.read().splitlines(), is_ancestor)
+for line in said:
+    print(f"keel-git-receive: {line}", file=sys.stderr)
+sys.exit(1 if said else 0)

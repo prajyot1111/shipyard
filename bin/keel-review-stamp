@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""The SubagentStop hook of a house with Keel's review agents: records what `keel-reviewer`
+or `keel-verifier` answered and stamps the HEAD when the round is complete
+(keel/review/stamp.py). Puts the repo root on sys.path and runs stamp_main."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.review.stamp import stamp_main  # noqa: E402
+
+sys.exit(stamp_main())

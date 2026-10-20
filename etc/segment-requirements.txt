@@ -1,0 +1,36 @@
+# What the segments need from outside the standard library.
+#
+# `keel/` itself is stdlib only; this is the SEGMENTS' venv, not Keel's. It is installed
+# into <repo>/.venv (which is what `keel fetch` looks for beside the segments tree) and
+# never into the machine's Python: Homebrew's is externally managed (PEP 668), and a
+# personal agent that mutates the system interpreter in order to read its own shopping
+# bills has overreached. Build it with:
+#
+#     python3 -m venv .venv && .venv/bin/pip install -r etc/segment-requirements.txt
+#
+# EVERY package is pinned, including the ones nobody asked for.
+#
+# The direct dependency is pdfplumber. The rest arrive with it, and pinning only the top
+# of that tree would have left pdfminer.six, Pillow and cryptography resolving to whatever
+# PyPI served on the day the venv happened to be built. That is the failure this file
+# claims to prevent, one layer down and with a wider blast radius: the fetch role prefers
+# this interpreter for EVERY segment's fetcher, not only the one that reads PDFs.
+# The reader parses money, and a parser that quietly changes behaviour under a background
+# upgrade is a bill that reads differently this month than it did last month, with nothing
+# to say why.
+#
+# Raising a pin is therefore a deliberate act. Regenerate the whole set together with:
+#
+#     .venv/bin/pip install --upgrade pdfplumber && .venv/bin/pip list --format=freeze
+#
+# and re-run segments/instamart/test_fetch.py before committing the result.
+pdfplumber==0.11.10
+
+# pdfplumber's own tree, pinned at what it resolved to on 31 Jul 2026.
+cffi==2.1.0
+charset-normalizer==3.4.9
+cryptography==50.0.0
+pdfminer.six==20260107
+pillow==12.3.0
+pycparser==3.0
+pypdfium2==5.12.1

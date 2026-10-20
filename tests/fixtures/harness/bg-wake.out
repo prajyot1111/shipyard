@@ -1,0 +1,5 @@
+backgrounded · 4e53210b · c315probe (idle — send a prompt to start)
+  claude agents             list sessions
+  claude attach 4e53210b    open in this terminal
+  claude logs 4e53210b      show recent output
+  claude stop 4e53210b      stop this session

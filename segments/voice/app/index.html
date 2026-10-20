@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" data-mode="personal" data-density="work">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<meta name="color-scheme" content="dark">
+<title>Voice</title>
+
+<!-- Its own manifest, scope and icon, so "add to home screen" installs VOICE as an app of
+     its own rather than a bookmark into the deck (decision D8). -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#161412">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Voice">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/voice-mark.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<!-- THE DECK'S OWN SHEETS FIRST (VP-6): its palettes, its reset, and the plan pages' board
+     embed, which is how a board a turn drew is drawn here by the deck's own renderer. The
+     page is same origin with the deck, so these are the deck's files, not copies. -->
+<link rel="stylesheet" href="/ui.css">
+<link rel="stylesheet" href="/ui.plan.css">
+<link rel="stylesheet" href="app.css">
+<script>
+/* THE PALETTE IS THE SPACE, set before first paint so nothing flashes: `?space=`, then the
+   space a capture is filed in (`voice.space`), then personal. Its own key, never the deck's
+   `keel.space`: browsing work cards on the deck must not turn the next idea into a work card. */
+(function () {
+  var q = new URLSearchParams(location.search), m = q.get('space');
+  try { m = m || localStorage.getItem('voice.space'); } catch (e) { /* a private window */ }
+  if (m === 'work' || m === 'personal') document.documentElement.setAttribute('data-mode', m);
+})();
+</script>
+<!-- The gateway's one home for the page's answers (voice/harbor_voice/config.py rendered).
+     Loaded before the page; the page falls back to the same answers when it is down. -->
+<script src="/voice/flags.js" onerror="window.VOICE_FLAGS=null"></script>
+</head>
+<body>
+
+<!-- ONE SCREEN ON THE PHONE, A STUDIO ON THE DESK (VP-1). Four body children and a sheet.
+     The phone shows the header and the chat; at 900px the same body becomes a three column
+     grid: who you can talk to, the chat, and what the turn touched. No tab bar and no
+     drawer: the page has one section, and the back link returns to the deck. -->
+<header class="v-top" id="top">
+  <a class="v-back" id="back" href="/?view=now" aria-label="back to the deck">
+    <span class="v-back-glyph" aria-hidden="true">‹</span>
+    <span class="v-back-dot" id="backdot" hidden></span>
+  </a>
+  <span class="v-title">Voice</span>
+  <button class="v-who" id="who" type="button" aria-label="talking to Harbor">
+    <span class="v-ring" id="ring" aria-hidden="true" hidden></span>
+    <span class="v-who-dot" id="whodot" aria-hidden="true"></span>
+    <span class="v-who-id mono" id="whoid" hidden></span>
+    <span class="v-who-name" id="whoname">Harbor</span>
+  </button>
+  <span class="spacer"></span>
+  <span class="v-chips" id="chips"></span>
+  <a class="v-deck" id="deck" href="/?view=now">Open the deck</a>
+  <button class="v-rec" id="rec" type="button" hidden aria-label="recording is on, what that means">
+    <span class="v-rec-dot" aria-hidden="true"></span><span class="v-rec-word mono">REC</span>
+  </button>
+  <button class="v-icon" id="sheetbtn" type="button" aria-haspopup="dialog"
+          aria-controls="sheet" aria-label="settings and everything said">⋯</button>
+</header>
+
+<nav class="v-rail" id="rail" aria-label="who you can talk to">
+  <h2 class="v-h">Talk to</h2>
+  <ul class="v-talkto" id="talkto"></ul>
+  <h2 class="v-h">This session</h2>
+  <ul class="v-session" id="session"></ul>
+  <p class="v-keys mono">Space hold · Esc cut<br>R say it again · / type</p>
+</nav>
+
+<main class="v-chat" id="chat">
+  <div class="v-stage" id="stage" aria-live="polite" aria-atomic="false">
+    <div class="v-empty" id="empty">
+      <p class="v-empty-lead">Hold to talk to Harbor, or type.</p>
+      <p class="v-empty-list">what needs me · card this and assign it · walk me through the merge queue</p>
+    </div>
+    <div class="v-turns" id="turns"></div>
+  </div>
+
+  <!-- THE COMPOSER (VP-1): a chat you can also talk to. A wide field and the hold-to-talk
+       button in the thumb zone; while he holds, it becomes the full-width voice bar, and
+       the bar's own keyboard button returns to typing. All of it sits inside one body
+       child, so the desk grid keeps its cells (tests/test_voice_css.py). -->
+  <div class="v-dock" id="dock">
+    <p class="v-note" id="note" hidden></p>
+    <div class="v-pills" id="pills" hidden>
+      <button class="v-pill v-conv" id="convpill" type="button" hidden
+              aria-label="conversation is on, tap to end it"><span class="v-live" aria-hidden="true"></span>Conversation</button>
+      <button class="v-pill v-armed" id="armedpill" type="button" hidden
+              aria-label="the next hold is a capture, tap to cancel">Capture next</button>
+    </div>
+    <div class="v-compose" id="compose">
+      <button class="v-plus" id="plus" type="button" aria-haspopup="menu" aria-expanded="false"
+              aria-controls="menu" aria-label="more ways to talk">+</button>
+      <textarea class="v-field" id="field" rows="1" placeholder="Message Harbor"
+                aria-label="message Harbor" enterkeyhint="send"></textarea>
+      <button class="v-send" id="send" type="button" hidden aria-label="send">Send</button>
+      <button class="v-mic" id="mic" type="button" aria-label="hold to talk">
+        <span class="v-mic-glyph" aria-hidden="true"></span>
+      </button>
+      <div class="v-menu" id="menu" role="menu" hidden>
+        <button class="v-mitem" id="mconv" type="button" role="menuitem">
+          <span class="v-mname" id="mconvname">Conversation</span>
+          <span class="v-mdesc" id="mconvdesc">Hands free: the microphone reopens after each answer</span>
+        </button>
+        <button class="v-mitem" id="mcapture" type="button" role="menuitem">
+          <span class="v-mname" id="mcapturename">Capture next</span>
+          <span class="v-mdesc" id="mcapturedesc">The next hold files a card, no answer</span>
+        </button>
+        <button class="v-mitem" id="mspace" type="button" role="menuitem">
+          <span class="v-mname" id="mspacename">Captures go to personal</span>
+          <span class="v-mdesc" id="mspacedesc">Tap to file them in work instead</span>
+        </button>
+      </div>
+    </div>
+    <div class="v-bar" id="bar" hidden>
+      <button class="v-kbd" id="kbd" type="button" aria-label="back to typing">
+        <span class="v-kbd-glyph" aria-hidden="true"></span>
+      </button>
+      <button class="v-barhit" id="control" type="button" aria-label="hold to talk">
+        <span class="v-barchip mono" id="barchip" hidden></span>
+        <span class="v-barmain">
+          <span class="v-wave" id="wave" aria-hidden="true"></span>
+          <span class="v-barrow">
+            <span class="v-barlabel" id="barlabel">Hold to talk</span>
+            <span class="v-barmeta mono" id="barmeta"></span>
+          </span>
+          <span class="v-barsub" id="barsub" hidden></span>
+        </span>
+      </button>
+    </div>
+  </div>
+</main>
+
+<aside class="v-touched" id="touched" aria-label="what this turn touched">
+  <h2 class="v-h">What this turn touched</h2>
+  <div class="v-touched-body" id="touchedbody"></div>
+</aside>
+
+<dialog class="v-sheet" id="sheet" aria-label="Settings and everything said">
+  <div class="v-sheethead">
+    <strong>Voice</strong>
+    <button class="v-done" id="sheetclose" type="button">Done</button>
+  </div>
+  <div class="v-sheetbody" id="sheetbody"></div>
+</dialog>
+
+<script src="voice.core.js"></script>
+<script src="voice.audio.js"></script>
+<script src="voice.link.js"></script>
+<script src="voice.listen.js"></script>
+<script src="voice.wave.js"></script>
+<script src="voice.board.js"></script>
+<script src="voice.view.js"></script>
+<script src="voice.desk.js"></script>
+<script src="voice.sheet.js"></script>
+<script src="app.js"></script>
+</body></html>

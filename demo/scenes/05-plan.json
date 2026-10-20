@@ -1,0 +1,108 @@
+{
+  "scene": "5. Plan gate: steps, a diagram, the decision; an Ask on the decision, answered on the page; picked; approved",
+  "seed": "live: the export card at its plan gate",
+  "start": "/plan/{{card}}",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scale": 2,
+  "hero": "the answer",
+  "names": {
+    "summary": ".pblock.pb-h[data-bid='goal']",
+    "diagram": ".pblock.t-board",
+    "steps": ".pblock.t-steps",
+    "decision": ".pblock.t-decision[data-bid='{{decision}}']",
+    "ask_add": ".pblock.t-decision[data-bid='{{decision}}'] button.pnote-add",
+    "ask_tab": "button:has-text('Ask the house')",
+    "ask_field": "textarea[placeholder='What do you want the house to clear up?']",
+    "ask_now": "button:has-text('Ask now')",
+    "question": ".pask-q",
+    "reply": ".pask-reply >> nth=-1",
+    "pick": ".pblock.t-decision[data-bid='{{decision}}'] .pd-opt[data-key='{{option}}']",
+    "approve": "button:has-text('Approve with these answers')"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": ".pblock",
+      "label": "the plan",
+      "pause": 3000
+    },
+    {
+      "do": "scroll",
+      "target": "diagram",
+      "label": "the diagram",
+      "pause": 3500
+    },
+    {
+      "do": "scroll",
+      "target": "steps",
+      "label": "the steps",
+      "pause": 3000
+    },
+    {
+      "do": "scroll",
+      "target": "decision",
+      "label": "the decision",
+      "pause": 3000
+    },
+    {
+      "do": "click",
+      "target": "ask_add",
+      "label": "note",
+      "pause": 800
+    },
+    {
+      "do": "click",
+      "target": "ask_tab",
+      "label": "ask tab",
+      "pause": 600
+    },
+    {
+      "do": "type",
+      "target": "ask_field",
+      "text": "Why stream the file instead of building it in memory?",
+      "delay": 50,
+      "label": "the question",
+      "pause": 800
+    },
+    {
+      "do": "click",
+      "target": "ask_now",
+      "label": "ask now",
+      "pause": 1500
+    },
+    {
+      "do": "eval",
+      "label": "answered",
+      "pause": 1000,
+      "js": "(async () => { const n = document.querySelectorAll('.pask-reply').length; for (let i = 0; i < 150; i++) { if (document.querySelectorAll('.pask-reply').length > n) return true; await new Promise(r => setTimeout(r, 2000)); window.Keel.loadPlan(true); } throw new Error('the house did not answer in 300s'); })()"
+    },
+    {
+      "do": "scroll",
+      "target": "reply",
+      "label": "the answer",
+      "pause": 5000
+    },
+    {
+      "do": "click",
+      "target": "pick",
+      "label": "picked",
+      "pause": 2000
+    },
+    {
+      "do": "click",
+      "target": "approve",
+      "label": "approve",
+      "pause": 1500
+    },
+    {
+      "do": "wait",
+      "for": "!document.body.innerText.includes('plan gate open')",
+      "timeout": 60000,
+      "label": "approved",
+      "pause": 3000
+    }
+  ]
+}

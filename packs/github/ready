@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""`ready [gh|sign-in|address|access]`: what the pack needs on this machine, each as a
+check with a reason and a fix (the kit's `verbs.py`, gh_ready.py). `pack.toml` runs one per
+`[[requires]]` entry: exit 0 is ready."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path[:0] = [str(HERE), os.environ.get("KEEL_HOME") or str(HERE.parent.parent), str(HERE.parent.parent)]
+
+from keel.packkit import verbs  # noqa: E402
+
+sys.exit(verbs.run("ready", sys.argv[1:], pack=HERE, layer="gh_layer"))

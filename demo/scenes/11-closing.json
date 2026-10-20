@@ -1,0 +1,48 @@
+{
+  "scene": "11. Closing: the Shipyard titles over the deck at the end of the day; then the whole day on the board as a kanban, done included, for the short cuts (c-807)",
+  "seed": "evening",
+  "start": "/?view=cards",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scale": 2,
+  "hero": "all clear",
+  "names": {
+    "rail": "#rail",
+    "header": "#header",
+    "export": ".row:has-text('Add CSV export'), tr:has-text('Add CSV export')",
+    "dark": "div.tile:has-text('dark theme')",
+    "digest": "div.tile:has-text('weekly reports digest')",
+    "rounding": "div.tile:has-text('totals rounding')",
+    "tile": "div.tile:has-text('Add CSV export')",
+    "shipping": "section.lane[data-key='shipping']",
+    "done": "section.lane[data-key='done']"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "#rail",
+      "label": "deck",
+      "pause": 3000
+    },
+    {
+      "do": "click",
+      "target": "#rail >> text=Attention",
+      "label": "all clear",
+      "pause": 3500
+    },
+    {
+      "do": "goto",
+      "url": "/?view=cards&inc=done&layout=kanban",
+      "label": "kanban",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "target": "section.lane[data-key='done'] div.tile",
+      "label": "the day",
+      "pause": 4000
+    }
+  ]
+}

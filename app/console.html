@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" data-mode="console" data-density="work">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Bosun</title>
+<!-- Installable as its own app (c-519): the manifest is scoped to /console, so a home-screen
+     Bosun opens here and never inside the deck. -->
+<meta name="theme-color" content="#0B0B0C">
+<link rel="icon" href="/icons/bosun.ico" sizes="16x16 32x32">
+<link rel="apple-touch-icon" href="/icons/bosun-180.png">
+<link rel="stylesheet" href="/ui.css">
+<link rel="stylesheet" href="/ui.console.css">
+<script>
+/* The shell worker (app/sw.js), as the deck registers it (c-540): the Console's files are in
+   its list too, so a switch from Keel reuses them rather than fetching them again. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('service worker:', e); });
+  });
+}
+</script>
+</head>
+<body class="consolepage">
+<!-- The deck's shell (c-591): a rail on the desk, a bottom tab bar on the phone, one section
+     at a time. A card opens in the deck's own Inspector, so this page loads none of it. -->
+<nav class="rail" id="rail" aria-label="Bosun"></nav>
+<div class="main">
+  <header class="header" id="header"></header>
+  <main class="body console" id="body"></main>
+</div>
+<nav class="dock" id="dock" aria-label="Bosun"></nav>
+<div id="sheet"></div>
+<div id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/ui.core.js"></script>
+<script src="/ui.console.asks.js"></script>
+<script src="/ui.console.js"></script>
+</body>
+</html>

@@ -1,0 +1,1462 @@
+/* The deck's stylesheet.
+ *
+ * The tokens are the unified dashboard's, verbatim: two palettes (work, personal) that
+ * carry colour only, one geometry declared on :root, and a density dial (glance, work,
+ * deep) that changes padding and gap and never type size. Four type sizes (15/13/11/10),
+ * two weights (400/600), a 4px grid. Boxed elements (panels, tiles, rows, cells) are
+ * square; only pills and chips are soft. No shadows: depth is a surface ladder plus
+ * hairlines. Machine values are monospace; human text is not.
+ *
+ * WHAT A COLOUR MEANS, and it means the same thing in both palettes (unified's rule,
+ * adopted whole):
+ *   accent  YOU. Something waits on you, or you are here. The most frequent state on
+ *           the board, and not a fault, which is why it is not red.
+ *   warn    running elsewhere, or gone quiet. Notable, waiting on something that is
+ *           not you, and usually normal.
+ *   crit    BROKEN. Something that should be true is not. Rare on purpose.
+ *   good    healthy, or landed.
+ * The TYPE palette (--t-*) is orthogonal to all four: it says what KIND of thing a row
+ * is, never how it is doing. Six kinds, six hues, each one picked inside the palette's
+ * own family so the page gains colour without gaining a second identity. It is what
+ * the first pass of this deck dropped, and dropping it is why the surface read grey
+ * next to the dashboard it was copied from. */
+
+:root{
+  --T:.34s; --E:cubic-bezier(.32,.72,0,1);
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;
+  --r:0; --pill:20px; --lane-w:244px; --rail-w:186px;
+  /* `--padx` is the horizontal half of `--pad`, named on its own because a strip that runs
+     edge to edge inside a padded box has to bleed by exactly that much and no more. */
+  --pad:11px 12px; --grid:7px; --padx:12px;
+  /* what a scrolling strip fades by on the edge it can still be scrolled toward */
+  --fade-end:linear-gradient(to right,#000 calc(100% - 28px),transparent);
+  --fade-start:linear-gradient(to right,transparent,#000 28px);
+  --fade-both:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent);
+  /* the same fade downward, for a surface that holds more below rather than beside */
+  --fade-down:linear-gradient(to bottom,#000 calc(100% - 28px),transparent);
+  /* how much of the window the on-screen keyboard covers; `K.markKeyboard` keeps it true */
+  --kbd:0px;
+}
+html[data-density="glance"]{--pad:7px 10px; --grid:4px; --padx:10px}
+html[data-density="work"]  {--pad:11px 12px; --grid:7px; --padx:12px}
+html[data-density="deep"]  {--pad:14px 14px; --grid:11px; --padx:14px}
+
+html[data-mode="work"]{
+  --canvas:#101418; --s1:#171D23; --s2:#1E262E; --s3:#26303A;
+  --hair:#242E37; --hair-hi:#33404C;
+  --ink:#EAF2F8; --ink-2:#A6B6C4; --ink-3:#7C8E9E;
+  --accent:#5BD6C0; --accent-ink:#8FE7D7; --accent-soft:#0F2E2B;
+  --crit:#FF8A78; --crit-soft:#2A1411; --warn:#E9B45C; --warn-soft:#26200F; --good:#86D18F;
+  --good-soft:#132318;
+  --on-accent:#0B1512;
+  --glow:rgba(91,214,192,.16);
+  --t-task:#5BD6C0; --t-plan:#7FB2F0; --t-output:#B9A0FF;
+  --t-context:#86D18F; --t-session:#E9B45C; --t-review:#FF8A78;
+}
+html[data-mode="personal"]{
+  --canvas:#161412; --s1:#1D1A17; --s2:#24211D; --s3:#2E2A25;
+  --hair:#2A2622; --hair-hi:#3A352F;
+  --ink:#F0ECE6; --ink-2:#C0B7AC; --ink-3:#92897E;
+  --accent:#D9A468; --accent-ink:#EABF8C; --accent-soft:#302517;
+  /* The statuses sit OFF the accent's warm axis on purpose: in the dashboard's palette
+     review they all cleared 4.5:1 and all still read as mud, because the contrast that
+     was missing was chromatic rather than luminous. */
+  --crit:#F08F92; --crit-soft:#301A1B; --warn:#E0C96E; --warn-soft:#2B2712; --good:#A0CE8C;
+  --good-soft:#1C2417;
+  --on-accent:#1A1208;
+  --glow:rgba(217,164,104,.14);
+  --t-task:#D9A468; --t-plan:#8CBEE8; --t-output:#C0A6EE;
+  --t-context:#A0CE8C; --t-session:#E0C96E; --t-review:#F08F92;
+}
+
+*,*::before,*::after{box-sizing:border-box;min-width:0}
+
+/* THE SCROLLBAR, built from the same tokens so it follows the palette, and persistent
+   rather than an overlay. Do NOT set scrollbar-width here: Chrome honours the standard
+   property over the ::-webkit-* pseudo elements, and on macOS that means the overlay bar
+   again. Firefox has no pseudo elements, so it takes the standard property below. */
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--hair-hi);border-radius:6px;
+  border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--ink-3);background-clip:content-box}
+.lanechips::-webkit-scrollbar,.strip::-webkit-scrollbar{height:7px}
+@supports not selector(::-webkit-scrollbar-thumb){
+  *{scrollbar-width:thin;scrollbar-color:var(--hair-hi) transparent}
+}
+html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink)}
+body{font-family:var(--sans);font-size:13px;font-weight:400;line-height:1.5;letter-spacing:-.005em;
+  height:100dvh;display:flex;overflow:hidden}
+h1,h2,h3,h4,p,dl,dt,dd,ul,ol,figure{margin:0;font:inherit}
+ul,ol{padding:0;list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--s2);border:1px solid var(--hair-hi);
+  border-radius:var(--r);padding:0 12px;height:28px}
+textarea{height:auto;min-height:72px;padding:8px 12px;resize:vertical}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
+a{color:var(--accent-ink);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:1px solid var(--accent);outline-offset:1px}
+[hidden]{display:none !important}
+table,thead,tbody,tfoot,tr,th,td{color:inherit}
+
+/* type helpers: the four sizes, the two weights, the machine layer */
+.t15{font-size:15px}.t13{font-size:13px}.t11{font-size:11px}.t10{font-size:10px}
+.w4{font-weight:400}.w6{font-weight:600}
+.mono{font-family:var(--mono)}.ink2{color:var(--ink-2)}.ink3{color:var(--ink-3)}.crit{color:var(--crit)}
+.title{font-size:15px;font-weight:600;letter-spacing:-.02em;color:var(--ink)}
+html[data-mode="console"]{
+  --canvas:#0B0B0C; --s1:#111113; --s2:#18181B; --s3:#222226;
+  --hair:#1F1F23; --hair-hi:#2E2E34;
+  --ink:#EDEDF2; --ink-2:#ABABB6; --ink-3:#7F7F8B;
+  --accent:#A59BFF; --accent-ink:#C3BCFF; --accent-soft:#1E1B36;
+  /* The console (c-519): graphite neutrals and the iris accent he picked (c-517). The
+     statuses differ from the iris in hue AND lightness, so none of them reads as "Bosun". */
+  --crit:#FF8A7A; --crit-soft:#2E1512; --warn:#E8B24E; --warn-soft:#2A2110; --good:#7FCF8C;
+  --good-soft:#142417;
+  --on-accent:#120E2B;
+  --glow:rgba(165,155,255,.16);
+  --t-task:#A59BFF; --t-plan:#7FB2F0; --t-output:#D6A8F0;
+  --t-context:#7FCF8C; --t-session:#E8B24E; --t-review:#FF8A7A;
+}
+
+.label{font-family:var(--mono);font-size:11px;font-weight:400;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.lbl10{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+/* A mark in the app has no tile (c-518): its bare glyph is the MASK and the page's palette is
+   the paint. Keel's hull and fin takes the space's accent, so it still says which space this
+   is, as the square it replaced did. */
+.mark{width:20px;height:20px;background:var(--accent);flex:0 0 auto;display:inline-block;
+  -webkit-mask:url(/icons/keel-glyph.svg) center/contain no-repeat;mask:url(/icons/keel-glyph.svg) center/contain no-repeat}
+.dot{width:8px;height:8px;border-radius:8px;display:inline-block;flex:0 0 auto;background:var(--ink-3)}
+.dot.busy{background:var(--accent)}.dot.exited{background:var(--crit)}.dot.good{background:var(--good)}
+.ellip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spacer{flex:1}
+
+/* ---------- shell ---------- */
+.rail{width:var(--rail-w);flex:0 0 var(--rail-w);background:var(--s1);border-right:1px solid var(--hair);
+  display:none;flex-direction:column}
+.rail-brand{display:flex;align-items:center;gap:8px;padding:12px;font-weight:600}
+.rail-nav{display:flex;flex-direction:column;gap:4px;padding:4px 8px}
+.rail-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:var(--r);color:var(--ink-2);width:100%}
+.rail-item .name{flex:1}
+.rail-item:hover{background:var(--s1);color:var(--ink)}
+.rail-item.on{background:var(--s2);color:var(--ink);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+.badge{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--ink-2);background:var(--s3);
+  padding:0 8px;height:16px;line-height:16px;border-radius:4px;flex:0 0 auto}
+.rail-item.on .badge{background:var(--accent-soft);color:var(--accent-ink)}
+.badge.need{background:var(--crit-soft);color:var(--crit)}
+.rail-foot{margin-top:auto;padding:12px;font-family:var(--mono);font-size:10px;color:var(--ink-2);border-top:1px solid var(--hair)}
+.main{flex:1;display:flex;flex-direction:column;min-height:0}
+
+.header{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--hair);flex:0 0 auto}
+/* The header is one row and it CONTAINS that row. The space name and the view name are the
+   two things in it that may give ground, so they shrink and ellipsise; with nothing saying
+   so they were squeezed to zero width and painted straight past the edge the moment the
+   restart pill appeared. */
+.header h1{font-size:15px;font-weight:600;letter-spacing:-.02em}
+.header h1,.header .hint{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the view name gives ground first: the dock already says which route is open, the space
+   name is the one thing in the header that nothing else on the screen says */
+.header h1{flex:0 1 auto}
+.header .hint{font-size:13px;color:var(--ink-2);flex:0 99 auto}
+.pill{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:var(--pill);
+  background:var(--s2);border:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto;white-space:nowrap}
+.pill .dot{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 18%,transparent)}
+.pill.stale .dot{background:var(--crit);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit) 18%,transparent)}
+/* ---------- the health verdict and the services block (F4) ----------
+   One dot, coloured by level: green is good, amber is warn, red is crit, `off` (a service
+   this machine does not run) is the quiet ink. The header's is a 44px icon on the phone,
+   like the two beside it, so it can never widen the row (P4). */
+.hdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--ink-3)}
+.green>.hdot{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 18%,transparent)}
+.amber>.hdot{background:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 18%,transparent)}
+.red>.hdot{background:var(--crit);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit) 18%,transparent)}
+.services{display:flex;flex-direction:column}
+.svc{display:flex;align-items:center;gap:8px;min-height:32px;border-bottom:1px solid var(--hair);font-size:13px}
+.svc:last-child{border-bottom:0}
+.svc-name{font-family:var(--mono);font-size:11px;color:var(--ink-2);width:56px;flex:0 0 auto}
+.svc-state{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.svc.off .svc-state{color:var(--ink-2)}
+.svc.red .svc-state{color:var(--crit)}
+.svc.amber .svc-state{color:var(--warn)}
+.svc .age{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.reasons{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+/* The Logins list (c-558): a row per credential, its dot by level, the state in that
+   level's ink, and a red row's one-liner wrapping under it with its Copy button. */
+.logins-list{display:flex;flex-direction:column}
+.lg{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--hair);font-size:13px;min-width:0}
+.lg:last-child{border-bottom:0}
+.lg-head{display:flex;align-items:center;gap:8px;min-width:0}
+.lg.green .hdot{background:var(--good)}
+.lg.amber .hdot{background:var(--warn)}
+.lg.red .hdot{background:var(--crit);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit) 18%,transparent)}
+.lg-label{color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg .age{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.lg-state{color:var(--ink-2);overflow-wrap:anywhere}
+.lg.red .lg-state{color:var(--crit)}
+.lg.amber .lg-state{color:var(--warn)}
+.lg-where{overflow-wrap:anywhere}
+.lfix{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.lfix .fix{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--mono);font-size:11px;
+  background:var(--s2);border:1px solid var(--hair);border-radius:var(--r);padding:4px 8px}
+.lfix .lcopy{flex:0 0 auto;min-height:44px}
+.sheet-sub{display:flex;align-items:center;gap:8px;margin-top:16px}
+.iconbtn{width:28px;height:28px;border-radius:var(--r);background:var(--s2);border:1px solid var(--hair);color:var(--ink-2);
+  display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 auto}
+/* the Voice button: the bare lighthouse with its arcs, in the button's own ink like its neighbours */
+.iconbtn.voicebtn .glyph{width:20px;height:20px;display:block;background:currentColor;
+  -webkit-mask:url(/icons/voice-glyph.svg) center/contain no-repeat;mask:url(/icons/voice-glyph.svg) center/contain no-repeat}
+
+/* ---------- Bosun's entry, left of the drain pill (c-519) ----------
+   Its mark is iris in every space, the colour Bosun wears everywhere (c-517): the deck's
+   own accent would say "this space", and Bosun belongs to neither. The literal is the
+   console palette's --accent (html[data-mode="console"] below). */
+.bmark{width:16px;height:16px;display:block;flex:0 0 auto;background:#A59BFF;
+  -webkit-mask:url(/icons/bosun-glyph.svg) center/contain no-repeat;mask:url(/icons/bosun-glyph.svg) center/contain no-repeat}
+a.pill.bosun{gap:8px;padding:0 8px 0 8px;color:var(--ink);text-decoration:none;font-family:var(--sans);font-size:13px;font-weight:600}
+a.pill.bosun:hover{border-color:var(--hair-hi)}
+.pill.bosun .dot{box-shadow:none}
+
+/* ---------- a Keel card: Bosun builds it (c-592) ----------
+   Its label and Bosun's view of it in the pane. Iris like the mark, in every space: it is
+   Bosun's colour, not the space's. What c-522's driving switches, Bosun's note and the
+   May / May not panel wore is gone with them. */
+.kchip{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border:1px solid #A59BFF;
+  border-radius:var(--pill);font-family:var(--mono);font-size:11px;color:#A59BFF;white-space:nowrap;flex:0 0 auto}
+.kchip .bmark{width:12px;height:12px}
+td.t .kchip{margin-right:8px}
+.keelview{display:flex;flex-direction:column;gap:8px;padding:12px 16px;background:var(--s1);
+  border-left:2px solid #A59BFF;margin:0 0 12px}
+.keelview .kv-grid{margin:0}
+.pill.bosun .dot.b-idle,.pill.bosun .dot.b-working{background:var(--good)}
+.pill.bosun .dot.b-working{animation:breathe 1.4s ease-in-out infinite}
+.pill.bosun .dot.b-stopped,.pill.bosun .dot.b-never{background:var(--ink-3)}
+.pill.bosun .dot.b-away,.pill.bosun .dot.b-stuck{background:var(--warn)}
+.pill.bosun .dot.b-voice{background:var(--accent)}
+.bcount{font-family:var(--mono);font-size:10px;font-weight:600;min-width:20px;height:20px;line-height:18px;
+  padding:0 4px;border-radius:20px;text-align:center;border:1px solid var(--hair-hi);color:var(--ink-2);background:var(--s3)}
+.bcount.need{border-color:var(--crit);color:var(--crit);background:var(--crit-soft)}
+.iconbtn.bosunbtn{position:relative;text-decoration:none}
+.iconbtn.bosunbtn .bmark{width:20px;height:20px}
+.bbadge{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;line-height:20px;padding:0 4px;
+  border-radius:20px;background:var(--crit);color:var(--canvas);font-family:var(--mono);font-size:10px;font-weight:600;text-align:center}
+
+.controls{display:none;align-items:center;gap:12px;padding:8px 16px 12px;border-bottom:1px solid var(--hair);flex:0 0 auto}
+.switch{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+.switch button{display:flex;align-items:center;gap:8px;color:var(--ink-3);padding:4px 8px;border-radius:var(--r)}
+.switch button .dot{background:var(--ink-3)}
+.switch button:hover{color:var(--ink-2)}
+.switch button.on{color:var(--ink);font-weight:600}
+/* the dot is the only colour this control gets, so it carries the accent's ring too */
+.switch button.on .dot{background:var(--accent);box-shadow:0 0 0 3px var(--glow)}
+.dial{display:flex;gap:4px;background:var(--s2);border:1px solid var(--hair);padding:4px;flex:0 0 auto}
+.dial button{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);padding:4px 12px}
+.dial button:hover{color:var(--ink)}
+.dial button.on{background:var(--s3);color:var(--ink);font-weight:600}
+.toggle{display:flex;gap:4px;background:var(--s2);border:1px solid var(--hair);padding:4px;flex:0 0 auto}
+.toggle button{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);padding:4px 12px}
+.toggle button.on{background:var(--s3);color:var(--ink)}
+/* Review settings' Model choice is a sheet control: a whole target on the phone */
+.rs-model{align-self:flex-start}.rs-model button{min-height:44px;min-width:88px}
+
+/* the chips a multiselect draws inside the card dialog */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{height:24px;padding:0 12px;border-radius:var(--pill);background:var(--s3);border:1px solid var(--hair);color:var(--ink);
+  font-size:11px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;max-width:100%}
+.chip .v{overflow:hidden;text-overflow:ellipsis}
+.chip.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+
+/* ---------- body, panels ---------- */
+.body{flex:1;min-height:0;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.panel{background:var(--s1);border:1px solid var(--hair);display:flex;flex-direction:column}
+.panel.grow{flex:1;min-height:0}
+.panel-head{padding:var(--pad);border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.panel-body{padding:var(--pad);display:flex;flex-direction:column;gap:var(--grid)}
+.panel.grow>.panel-body{flex:1;min-height:0}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{background:var(--s1);border:1px solid var(--hair);padding:var(--pad);display:flex;flex-direction:column;gap:4px}
+/* A TILE IS A READOUT AND IT IS COLOURED BY ITS OWN NUMBER. Grey digits on a grey
+   ground is what made this row of four say nothing at a glance: the border alone is a
+   1px signal three feet from the screen. The number takes the status, the border agrees
+   with it, and the label stays body text. */
+.stat.flag{border-color:var(--accent)}
+.stat.warn{border-color:var(--warn)}
+.stat.crit{border-color:var(--crit)}
+.stat .n{font-size:15px;font-weight:600;color:var(--ink)}
+.stat.flag .n{color:var(--accent-ink)}
+.stat.warn .n{color:var(--warn)}
+.stat.crit .n{color:var(--crit)}
+.stat .l{font-size:13px;color:var(--ink-2)}
+.stat .s{font-size:11px;color:var(--ink-2)}
+.meter{height:4px;border-radius:4px;background:var(--s3);overflow:hidden;margin:4px 0}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.meter i.warn{background:var(--warn)}.meter i.crit{background:var(--crit)}
+html[data-density="glance"] .stat .s,html[data-density="glance"] .stat .meter,
+html[data-density="glance"] .sub,html[data-density="glance"] .rowbody{display:none}
+
+.kv{display:flex;flex-direction:column}
+.kv-row{display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid var(--hair)}
+.kv-row:last-child{border-bottom:0}
+.kv-row dt{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);width:88px;flex:0 0 88px}
+.kv-row dd{font-size:13px;color:var(--ink);flex:1;overflow-wrap:anywhere}
+
+.btn{height:28px;padding:0 12px;border:1px solid var(--hair-hi);background:var(--s2);color:var(--ink);font-size:13px;font-weight:600;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;border-radius:var(--r)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.crit{border-color:var(--crit);color:var(--crit);background:transparent}
+.btn.sm{height:24px;padding:0 8px;font-size:11px}
+.btn.tap{min-height:44px;height:auto;width:100%;font-size:15px}
+.btn:disabled{opacity:.5;cursor:default}
+/* WAITING ON THE SERVER. A gate action takes five to fifteen seconds, so the button that
+   was pressed is the indicator: it says the progress verb, it breathes, and the rest of
+   its row goes quiet. The pulse is opacity, never a spinner glyph, which would want a
+   font this page does not load. The same breath marks the dragged tile, the drain pill
+   while anything is in flight, and the word that bridges the wait on a card. */
+.btn.pending,.tile.pending,.toggle button.pending{animation:breathe 1.4s ease-in-out infinite}
+.btn.pending:disabled{opacity:1;cursor:progress}
+/* the drain pill is a button now (it opens the services sheet), and its dot is the health
+   verdict: h-green, h-amber, h-red (F4) */
+button.pill{cursor:pointer;font-weight:400}
+.pill-word{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pill.h-green .dot{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 18%,transparent)}
+.pill.h-amber .dot{background:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 18%,transparent)}
+.pill.h-red .dot{background:var(--crit);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit) 18%,transparent)}
+.pill.h-red{border-color:var(--crit)}
+.pill.h-amber{border-color:var(--warn)}
+.pill.busy .dot{background:var(--accent);animation:breathe 1.4s ease-in-out infinite}
+.sw.bridge{color:var(--accent-ink);animation:breathe 1.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.5}}
+@media (prefers-reduced-motion:reduce){
+  .btn.pending,.tile.pending,.toggle button.pending,.pill.busy .dot,.sw.bridge,
+  .track i.cur.pulse{animation:none}
+  .btn.pending:disabled{opacity:.75}
+}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.actions input{flex:1;min-width:120px}
+
+/* the stage track and the pills */
+.track{display:flex;gap:4px;flex:0 0 auto}
+.track i{width:8px;height:8px;border-radius:8px;border:1px solid var(--hair-hi);display:block}
+.track i.done{background:var(--ink-3);border-color:var(--ink-3)}
+.track i.cur{background:var(--accent);border-color:var(--accent)}
+.track i.cur.pulse{animation:pulse 1.8s ease-in-out infinite}
+.track.blocked i.cur{background:var(--crit);border-color:var(--crit)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--accent);opacity:1}50%{box-shadow:0 0 0 4px transparent;opacity:.6}}
+/* A CHIP CARRIES ITS OWN EDGE, the dashboard's idiom: a tinted ground alone is a very
+   quiet signal on a dark surface, and the border is what makes six of them beside each
+   other separable. Chips stay soft; only boxed elements are square. */
+.spill{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;
+  background:var(--s3);color:var(--ink-2);border:1px solid var(--hair-hi);display:inline-block;white-space:nowrap}
+.spill.planning,.spill.review{color:var(--ink)}
+.spill.building{color:var(--warn);background:var(--warn-soft);border-color:var(--warn)}
+.spill.done{color:var(--good);background:var(--good-soft);border-color:var(--good)}
+.spill.blocked{color:var(--crit);background:var(--crit-soft);border-color:var(--crit)}
+.spill.gate{color:var(--accent-ink);background:var(--accent-soft);border-color:var(--accent)}
+/* a segment's notice (Q8): something is wrong outside the board, in the warn face */
+.spill.notice{color:var(--warn);background:var(--warn-soft);border-color:var(--warn)}
+/* a tracking card works at nothing of its own, so its chip is the quiet default rather
+   than the warn face `building` wears */
+.spill.tracking{color:var(--ink-2);background:var(--s3);border-color:var(--hair-hi)}
+/* the worst level a review carries, wearing the edge a blocked card wears */
+.spill.crit{color:var(--crit);background:var(--crit-soft);border-color:var(--crit)}
+
+/* Now strip */
+.strip{display:flex;gap:12px;flex-wrap:wrap}
+/* THE FACTOR RIDES THE LEFT BORDER: accent where the session is working, warn where it
+   has gone quiet, a broken crit edge where it is stalled. A native border style says all
+   of it without a gradient, and the stage never dims the tile wholesale. */
+.house{width:308px;flex:0 0 308px;background:var(--s2);border:1px solid var(--hair);padding:var(--pad);
+  display:flex;flex-direction:column;gap:8px;
+  border-left-width:2px;border-left-style:solid;border-left-color:var(--hair-hi)}
+.house.run{border-left-color:var(--accent)}
+.house.quiet{border-left-color:var(--warn)}
+.house.blocked{border-color:var(--crit);border-left-style:dashed;border-left-color:var(--crit)}
+.house-head .t{color:var(--ink)}
+.house-head{display:flex;align-items:center;gap:8px}
+.house-head .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.house-head .t{flex:1;font-weight:600}
+.house-head .age{font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.house-head .flag{font-size:11px;font-weight:600;color:var(--crit);flex:0 0 auto}
+.house-log{font-family:var(--mono);font-size:11px;color:var(--ink-2);background:var(--s3);padding:8px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.house-actions{display:flex;gap:8px}
+/* The live strip (c-599, app/ui.live.js): what the house is doing now, facts with ages. The
+   parts wrap as whole facts on a phone, never mid-fact, and the second line is the prompt,
+   the harness's own line or what it last said, clamped to two lines. */
+.livestrip{font-family:var(--mono);font-size:11px;color:var(--ink-2);background:var(--s3);padding:6px 8px;
+  display:flex;flex-direction:column;gap:3px;min-width:0}
+.lv-line{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;row-gap:2px;min-width:0}
+.lv-part{color:var(--ink);overflow-wrap:anywhere;min-width:0}
+.lv-read{margin-left:auto;font-size:10px;white-space:nowrap}
+.lv-said{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.lv-said.lv-ask{color:var(--accent-ink)}
+.drawer-head .livestrip,.phead .livestrip{margin-top:8px}
+/* Idle houses on Now (c-607, app/ui.idle.js): one line each, the card, its stage, how long
+   idle and what it holds; the facts wrap under the title on a phone, the button stays whole. */
+.idlesum{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:1;min-width:0}
+.idlelist{gap:6px}
+.idlerow{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:4px;padding:6px 8px;
+  background:var(--s2);border:1px solid var(--hair);border-left:3px solid var(--warn);min-width:0}
+.idlerow .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.idlerow .t{flex:1 1 140px;min-width:0;font-weight:600;color:var(--ink);text-align:left}
+.idlefacts{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:1 1 auto}
+.idlefacts.left{color:var(--warn)}
+.idlerow .btn{flex:0 0 auto;margin-left:auto}
+.empty{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:8px 0}
+/* A pushed route gone stale: the rows stay, this line says how old they are. */
+.waiting{padding:8px var(--pad);border-bottom:1px solid var(--hair);border-left:4px solid var(--warn);color:var(--warn);font-size:13px}
+/* A space whose login expired (lane Q): the same line in the critical colour, the command
+   in mono and free to wrap anywhere, since the config dir's path is longer than a phone. */
+.waiting.login{border-left-color:var(--crit);color:var(--crit);background:var(--crit-soft);overflow-wrap:anywhere}
+.waiting.login .fix{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.logins{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+/* What a page needs (c-631, `K.needs`): the same banner in the accent ink, since nothing is
+   broken, only not set up yet. Each why, what it unlocks, and Set it up, a 44px target on the
+   phone. The one-line form sits under a form field or in a card pane. */
+.waiting.needs{display:flex;flex-direction:column;align-items:flex-start;gap:4px;border-left-color:var(--accent);
+  color:var(--ink);background:var(--accent-soft);margin-bottom:12px;overflow-wrap:anywhere}
+.needs-head{font-weight:600;color:var(--accent-ink)}
+.needs-unlocks{color:var(--ink-2)}
+.needs .needs-go{margin-top:4px;display:inline-flex;align-items:center}
+/* a row Bosun sets up, not a step (c-729): the sentence, Open Bosun, the command with Copy */
+.needs-ask{display:flex;flex-direction:column;align-items:flex-start;gap:6px;align-self:stretch;min-width:0}
+.needs-ask .lfix{align-self:stretch;align-items:center}
+.needs-line{font-size:12px;color:var(--ink-2);overflow-wrap:anywhere}
+.needs-line a{color:var(--accent-ink);font-weight:600}
+/* on the card's action row a line takes the row's whole width, above the buttons (c-662) */
+.actionbar>.needs-line{flex:1 0 100%;grid-column:1 / -1}
+/* c-653: the line where Ship would be takes the row's whole width, on the desk and the phone */
+.shipwhy>.lfix{flex:1 0 100%}
+.shipwhy{flex:1 0 100%;grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:var(--ink)}
+/* Ship is named for what it sends, so on the phone it takes the row and may wrap */
+@media(max-width:899px){.actionbar.phone>.btn.shipsend{grid-column:1 / -1;white-space:normal;line-height:1.3;padding-top:8px;padding-bottom:8px}}
+@media(max-width:899px){.needs .needs-go{min-height:44px;height:auto}.needs-line a{display:inline-block;padding:12px 0}}
+
+/* split: list left, reading pane right */
+.split{display:flex;flex:1;min-height:0;gap:12px}
+.split-list{width:55%;flex:0 0 55%;display:flex;flex-direction:column;gap:8px;overflow:auto}
+.split-table{flex:1;display:flex;flex-direction:column;gap:8px;overflow:auto}
+.split-pane{width:45%;flex:0 0 45%;background:var(--s1);border:1px solid var(--hair);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.split-pane.drawer{width:400px;flex:0 0 400px}
+.split-pane.center{align-items:center;justify-content:center}
+.split-pane>*,.sheet-body>*,.body>*,.panel-body>*{flex:0 0 auto}
+.body>.panel.grow,.panel.grow>.panel-body>.split,.panel.grow>.panel-body>.board{flex:1 1 auto}
+/* A KEPT SECTION IS ONE NODE, and the pane's own column gap has to survive being wrapped
+   in it: `.split-pane` is a flex column with a 12px gap, so a section made of several
+   pieces carries the same gap inside its wrapper. */
+.psec{display:flex;flex-direction:column;gap:12px;min-width:0}
+.reading{background:var(--s2);padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;font-size:13px}
+.reading.mono{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+/* WHAT THE DECK KNOWS ABOUT THE PLAN, where the live lavish iframe used to sit. The frame
+   was reloaded by every poll and held lavish's whole chrome in a box a few hundred pixels
+   tall; Open plan opens the plan itself, full screen. */
+.planblock{background:var(--s2);border:1px solid var(--hair);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+/* the card's own boards: one row per picture, the live one marked, each opening its own */
+.boardblock{width:100%;text-align:left;color:var(--ink)}
+.boardrows,.filerows{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.boardrow{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;padding:8px;
+  min-height:44px;border:1px solid var(--hair);background:var(--s1);color:var(--ink)}
+.boardrow.live{border-color:var(--accent)}
+.planblock .t{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+/* WHAT THE SCANNER WROTE, RENDERED. The review pane reads the findings and the
+   orientation rather than showing the file: the lines arrive as text nodes and the only
+   thing the markup adds is the shape (a heading, a bullet, a fenced block). The sizes
+   stay inside the page's four, the weights inside its two. */
+.rendered{background:var(--s2);padding:12px;max-height:320px;overflow:auto;font-size:13px;
+  display:flex;flex-direction:column;gap:8px}
+.rendered h4{font-size:13px;font-weight:600;color:var(--ink)}
+.rendered p{color:var(--ink-2);overflow-wrap:anywhere}
+.rendered ul{padding-left:16px;list-style:disc;color:var(--ink-2)}
+.rendered li{display:list-item;overflow-wrap:anywhere}
+.rendered li+li{margin-top:4px}
+.rendered pre{font-family:var(--mono);font-size:11px;color:var(--ink-2);background:var(--s3);
+  padding:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* list rows */
+/* COLOUR SAYS WHAT KIND, NEVER HOW IT IS DOING. Every row in Attention is waiting on
+   him, so painting the urgent ones accent and the rest grey would say the same thing
+   twelve times. The left edge takes the TYPE palette (what kind of answer this is) and
+   the accent stays reserved for the selection, which means "you, here". */
+.row{background:var(--s1);border:1px solid var(--hair);padding:var(--pad);display:flex;flex-direction:column;gap:8px;width:100%;color:inherit;
+  border-left-width:2px;border-left-style:solid;border-left-color:var(--hair-hi)}
+.row:hover{background:var(--s2);border-color:var(--hair-hi)}
+.row.sel{background:var(--s2);border-color:var(--accent)}
+.row.blocked{border-color:var(--crit)}
+.row.k-plan{border-left-color:var(--t-plan)}
+.row.k-outcome{border-left-color:var(--t-review)}
+.row.k-blocked{border-left-color:var(--crit);border-left-style:dashed}
+.row.k-notice{border-left-color:var(--warn)}
+.row.sel.k-plan,.row.sel.k-outcome,.row.sel.k-blocked,.row.sel.k-notice{border-left-color:var(--accent)}
+.row-head .t{color:var(--ink)}
+.row-head{display:flex;align-items:center;gap:8px}
+.row-head .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.row-head .t{flex:1;font-weight:600}
+.row-head .age{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.row .sub{font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+.row-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* cards table */
+.table-wrap{overflow-x:auto;border:1px solid var(--hair)}
+table.cards{width:100%;border-collapse:collapse;min-width:640px;table-layout:fixed}
+/* The title has no width: it takes what the rest leave, so the rest sum to at most 924px and
+   `columns()` drops topic and last event under 1400px, which keeps the title over 200px
+   wherever the table is drawn without the pane (c-553) */
+table.cards col.c-id{width:64px}table.cards col.c-auto{width:96px}table.cards col.c-repo{width:96px}
+table.cards col.c-topic{width:96px}table.cards col.c-last{width:152px}table.cards col.c-age{width:64px}
+/* the three words: house and plan are one or two words, outcome carries a PR number
+   or a backlog count, so it is the wide one of the three */
+table.cards col.c-house{width:140px}table.cards col.c-plan{width:96px}table.cards col.c-outcome{width:120px}
+table.cards th,table.cards td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--hair);vertical-align:middle}
+table.cards th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);background:var(--s1)}
+table.cards tr.group td{background:var(--s2);font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+table.cards tr.card{cursor:pointer}
+table.cards tr.card:hover td{background:var(--s2)}
+/* A ROW'S STATE IS AN INSET EDGE ON ITS FIRST CELL, which is the only place a table
+   row has to carry one: a border on a `tr` is not painted with border-collapse, and
+   tinting the whole row for every state would drown the one row that wants him. */
+table.cards tr.card td:first-child{box-shadow:inset 2px 0 0 transparent}
+table.cards tr.need td{background:color-mix(in srgb,var(--accent) 6%,var(--s1))}
+table.cards tr.need td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+table.cards tr.need td.id{color:var(--accent-ink)}
+table.cards tr.blocked td:first-child{box-shadow:inset 2px 0 0 var(--crit)}
+table.cards tr.blocked td.id{color:var(--crit)}
+table.cards tr.sel td{background:var(--s2)}
+table.cards tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+table.cards td.t{color:var(--ink)}
+table.cards td.id{font-family:var(--mono);color:var(--ink-2);white-space:nowrap}
+table.cards td.t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.cards td.last{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+table.cards td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.cards td.age{font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap}
+/* ---------- the three status words ----------
+ * House, plan, outcome, in the machine face because they are machine facts, and coloured
+ * by what the word MEANS rather than by which column it sits in (the palette's rule:
+ * accent is yours or live here, warn runs elsewhere or waits, crit is broken, good has
+ * landed). The words are the row's state, so they never wrap: a row that grew a line when
+ * a house woke up would move every row under it. A question with nothing to answer draws
+ * no word at all, which is why there is no muted class here any more. */
+.sw{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink-2);white-space:nowrap;
+  display:inline-flex;align-items:center;gap:4px}
+.sw.acc{color:var(--accent-ink)}
+.sw.warn{color:var(--warn)}
+.sw.crit{color:var(--crit)}
+.sw.good{color:var(--good)}
+.sw.plain{color:var(--ink)}
+.sw.wait{color:var(--warn);font-weight:400;font-size:10px}
+/* A tracking card's word is a sentence of counts rather than one or two words, so it wraps
+   where every other word must not: nowrap on "tracking · 2 of 8 building, 1 at review,
+   5 waiting" is 60 characters running off a 390px screen. */
+.sw.tally{white-space:normal}
+.swords{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+table.cards td.swcell{white-space:nowrap}
+table.cards td.swcell .sw.tally{white-space:normal}
+table.cards td.swcell .sw.wait{margin-left:8px}
+/* a slice sits under its big card when the list is grouped by parent */
+table.cards tr.kin td.t{padding-left:28px;position:relative}
+table.cards tr.kin td.t::before{content:'\21B3';position:absolute;left:12px;color:var(--ink-3)}
+table.cards tr.bigcard td.id{color:var(--ink)}
+.kin{font-family:var(--mono);font-size:10px;color:var(--ink-3)}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters input{width:240px;max-width:100%}
+.fchip{height:24px;padding:0 12px;border-radius:var(--pill);background:var(--s2);border:1px solid var(--hair);color:var(--ink-2);font-size:11px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.fchip:hover{border-color:var(--hair-hi);color:var(--ink)}
+.fchip.on{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent)}
+.fchip.blocked.on{background:var(--crit-soft);color:var(--crit);border-color:var(--crit)}
+
+/* kanban: the current board's lanes */
+.board{display:flex;gap:12px;overflow-x:auto;flex:1;min-height:0;padding-bottom:8px}
+.lane{width:var(--lane-w);flex:0 0 var(--lane-w);display:flex;flex-direction:column;min-height:0;background:var(--s1);border:1px solid var(--hair)}
+.lane.over{border-color:var(--accent)}
+.lane-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--hair);background:var(--s2)}
+.lane-head .lbl10{letter-spacing:.11em}
+/* the Reviews kanban (2026-09-24): its five columns share the width at 1440 rather than
+   scrolling the last one off, down to a floor under which the board scrolls as Cards' does */
+[data-key="reviews-board"] .lane{flex:1 1 var(--lane-w);width:auto;min-width:200px}
+/* what a column means, under its name */
+.lane-said{padding:4px 12px;border-bottom:1px solid var(--hair);line-height:16px}
+.lane-head .n{font-family:var(--mono);font-size:10px;color:var(--ink-2);border:1px solid var(--hair-hi);
+  border-radius:4px;padding:0 5px;flex:0 0 auto}
+.stack{overflow-y:auto;flex:1;min-height:80px;padding:8px;display:flex;flex-direction:column;gap:8px}
+/* The same factor edge the Now strip takes, so a tile reads the same on the board as it
+   does in the strip. `need` is the loudest and the only tinted one: a flat tint, never a
+   fade. */
+.tile{background:var(--s2);border:1px solid var(--hair);padding:8px;display:flex;flex-direction:column;gap:4px;cursor:grab;
+  border-left-width:2px;border-left-style:solid;border-left-color:var(--hair-hi)}
+.tile:hover{border-color:var(--hair-hi)}
+.tile.run{border-left-color:var(--accent)}
+.tile.need{background:color-mix(in srgb,var(--accent) 6%,var(--s2));
+  border-color:color-mix(in srgb,var(--accent) 34%,var(--hair));border-left-color:var(--accent)}
+.tile.need .id{color:var(--accent-ink)}
+.tile.sel{border-color:var(--accent)}
+.tile.blocked{border-color:var(--crit);border-left-color:var(--crit);border-left-style:dashed}
+.tile .h{display:flex;align-items:center;gap:8px}
+.tile .id{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.tile .t{font-size:13px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.tile .m{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--ink-2)}
+.tile .m>*{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+/* detail */
+.drawer-head{display:flex;flex-direction:column;gap:4px}
+.kv-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px}
+.kv-grid dt{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.kv-grid dd{font-size:13px;color:var(--ink);margin-bottom:8px;overflow-wrap:anywhere}
+.slices{display:flex;flex-direction:column;gap:4px}
+.slice.need{box-shadow:inset 2px 0 0 var(--accent)}
+.slice.blocked{box-shadow:inset 2px 0 0 var(--crit)}
+.slice .swords{flex:0 0 auto}
+.sliceof{gap:8px}
+/* Now: one big card's running slices, stacked inside the parent's tile */
+.house.big{border-left-color:var(--t-task);width:340px;flex:0 0 340px}
+.slicelines{display:flex;flex-direction:column;gap:8px}
+.sliceline{background:var(--s3);padding:8px;display:flex;flex-direction:column;gap:7px}
+.sliceline.blocked{box-shadow:inset 2px 0 0 var(--crit)}
+/* the Split dialog: one row per slice, title and brief side by side */
+.splitrows{display:flex;flex-direction:column;gap:8px}
+.splitrow{display:flex;align-items:center;gap:8px}
+.splitrow .n{width:16px;flex:0 0 16px}
+.splitrow input{flex:1;min-width:0}
+.splitrow select{flex:0 0 auto;max-width:180px}
+.splitrow .chips{flex:0 0 auto;max-width:220px}
+.slice{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;background:var(--s2);font-size:13px;width:100%;color:inherit}
+.slice .name{flex:1 1 auto;min-width:96px;overflow-wrap:anywhere}
+.slice .id{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+/* The card tree (ui.tree.js): a big card's outline first in its pane, a slice's place in
+   it, the Assign tree counts, and the queue's number. One component on both widths; the
+   rows are buttons, so the phone's 44px floor below covers them. */
+.tree{display:flex;flex-direction:column;gap:4px}
+.treehead{display:flex;align-items:center;gap:8px}
+.treestep{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2);margin:8px 0 0}
+.treerows{display:flex;flex-direction:column;gap:4px;padding-left:12px}
+.treeslice{display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:8px;
+  background:var(--s2);width:100%;color:inherit;text-align:left}
+.treeslice .r1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.treeslice .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:0 0 auto}
+.treeslice .name{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
+.treeslice .r2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.treeslice .r2:empty{display:none}
+.treeslice.need{box-shadow:inset 2px 0 0 var(--accent)}
+.treeslice.blocked{box-shadow:inset 2px 0 0 var(--crit)}
+.treefollow .name{color:var(--ink-2)}
+.treedone{display:flex;align-items:center;gap:8px;padding:8px;background:var(--s2);
+  width:100%;color:var(--ink-2);font-size:13px;text-align:left}
+.treedone .chev{margin-left:auto;color:var(--ink-3);font-family:var(--mono);font-size:11px}
+.unb{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-left:auto}
+.spill.next{color:var(--accent-ink);background:var(--accent-soft);border-color:var(--accent);border-radius:var(--pill)}
+.intree{display:flex;flex-direction:column;gap:8px}
+.waitrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;background:var(--s2);
+  width:100%;color:inherit;text-align:left}
+.waitrow .id{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.waitrow .name{flex:1 1 auto;min-width:96px;font-size:13px;overflow-wrap:anywhere}
+.tcounts{display:flex;flex-direction:column;gap:8px}
+.tcount{background:var(--s2);border:1px solid var(--hair);padding:12px;display:flex;flex-direction:column;gap:4px}
+.tcount .n{font-size:15px;font-weight:600}
+.tcount .l{font-family:var(--mono);font-size:11px;color:var(--ink-2);overflow-wrap:anywhere}
+.tcount.good{border-color:var(--good)}.tcount.good .n{color:var(--good)}
+.tcount.warn{border-color:var(--warn)}.tcount.warn .n{color:var(--warn)}
+.tcount.acc{border-color:var(--accent)}.tcount.acc .n{color:var(--accent-ink)}
+.qn{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-right:8px}
+.agrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.agrid .btn{width:100%}
+.timeline{display:flex;flex-direction:column;border-top:1px solid var(--hair);padding-top:8px}
+.tl{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--hair);font-size:13px}
+.tl:last-child{border-bottom:0}
+.tl .at{font-family:var(--mono);font-size:11px;color:var(--ink-2);width:56px;flex:0 0 56px}
+/* The one place the type palette belongs on a card: an event's KIND, not its state.
+   Six kinds, the same six hues the dashboard gives its six kinds of node. */
+.tl .k{font-family:var(--mono);font-size:10px;color:var(--ink-3);width:64px;flex:0 0 64px;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
+.tl .k.k-stage{color:var(--t-plan)}
+.tl .k.k-hook{color:var(--t-session)}
+.tl .k.k-note{color:var(--t-context)}
+.tl .k.k-approve{color:var(--t-task)}
+.tl .k.k-sendback{color:var(--t-output)}
+.tl .k.k-block{color:var(--t-review)}
+.tl .x{color:var(--ink-2);overflow-wrap:anywhere;flex:1;white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.blockbox{background:var(--crit-soft);border:1px solid var(--crit);padding:12px;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto}
+pre.logs{font-family:var(--mono);font-size:11px;color:var(--ink-2);background:var(--s2);padding:12px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:60dvh;overflow:auto}
+code.cmd{font-family:var(--mono);font-size:11px;background:var(--s3);padding:8px;display:block;white-space:pre-wrap;overflow-wrap:anywhere;user-select:all}
+
+/* ---------- segments ----------
+ * The dashboard's segment card, which is the shape he named as the best thing on that
+ * surface, on the deck's own data (`segments[].summary.tiles`).
+ *
+ * THE CARD'S CHROME IS A THIN FRAME AROUND CONTENT IT DOES NOT DRAW. The name is a
+ * kicker, not a title, so it never competes with the numbers under it, and it carries the
+ * segment's OWN accent: --seg-ink / --seg-base are set inline per card from the same
+ * curated table the dashboard uses, so this rule never hardcodes a hue and six cards
+ * beside each other are six colours rather than six greys. A segment nobody has curated
+ * still rotates through those six, because grey beside five coloured cards reads as
+ * broken rather than as neutral.
+ *
+ * THE TILES ARE A HAIRLINE GRID, not a key/value list: 1px gaps over the --hair ground
+ * draw every cell's edge with no border on any cell, which is what makes a row of four
+ * numbers read as four numbers. Square, like every other boxed element here. */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.seg{background:var(--s1);border:1px solid var(--hair);display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.seg:hover{border-color:var(--hair-hi)}
+.seg-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--hair);min-width:0}
+.seg-dot{width:8px;height:8px;border-radius:8px;background:var(--seg-base,var(--accent));flex:0 0 auto}
+.seg-name{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--seg-ink,var(--accent-ink));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.seg-age{font-family:var(--mono);font-size:10px;color:var(--ink-2);flex:0 0 auto;margin-left:auto}
+.seg-open{font-family:var(--mono);font-size:11px;color:var(--seg-ink,var(--accent-ink));flex:0 0 auto;
+  min-height:28px;display:inline-flex;align-items:center;white-space:nowrap}
+.seg-none{font-family:var(--mono);font-size:10px;color:var(--ink-2);flex:0 0 auto}
+/* THE LINES ARE DRAWN BY THE CELLS, not by the grid's own ground showing through a 1px
+   gap. The gap trick is the dashboard's and it is one rule shorter, but a segment that
+   publishes five tiles into four columns leaves three cells that do not exist, and the
+   ground showed through them as a grey hole that read as broken rather than as odd. A
+   1px spread shadow on each cell paints the same hairline (adjacent shadows meet inside
+   the gap), and an absent cell paints nothing. The -1px top tucks the grid's first line
+   under the head's own rule instead of doubling it. */
+.stiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--s1);margin-top:-1px}
+.stile{background:var(--s1);padding:var(--pad);min-width:0;box-shadow:0 0 0 1px var(--hair)}
+/* A label wraps to two lines rather than truncating. "GOOGLE CLO..." names nothing, and
+   the clamp still keeps a long label from making one tile taller than its row. */
+.stile-l{font-size:10px;font-family:var(--mono);color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase;
+  line-height:1.4;overflow:hidden;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.stile-v{font-size:13px;color:var(--ink);margin-top:2px;overflow-wrap:anywhere}
+/* the first tile is the one the segment led with, so it keeps the hero's weight */
+.stile.hero .stile-v{font-size:15px;font-weight:600;color:var(--seg-ink,var(--ink))}
+/* the summary line: what the segment wants to say in words, under the numbers */
+.seg-foot{padding:var(--pad);border-top:1px solid var(--hair);display:flex;flex-direction:column;gap:4px}
+.seg-note{font-size:11px;color:var(--ink-2);overflow-wrap:anywhere}
+.seg .empty{padding:var(--pad)}
+.counts{font-family:var(--mono);font-size:10px}
+.counts b{font-weight:600;color:var(--crit)}
+/* A review waiting to be posted is waiting on HIM, so it takes the accent; a pull
+   request that has fallen behind is waiting on a machine, so it takes the warn. */
+.tile.flag{border-color:var(--accent);border-left-color:var(--accent)}
+.tile.behind{border-left-color:var(--warn)}
+.tile.behind .crit{color:var(--warn)}
+
+/* sheets, toast */
+/* THE KEYBOARD COVERS THE BOTTOM OF THE SCREEN AND THE LAYOUT VIEWPORT DOES NOT SHRINK
+   FOR IT. A sheet pinned to `inset:0` would therefore put its foot, which is where the
+   submit button lives, under the keys: on an 844px phone the keyboard is roughly the
+   bottom 40%. `--kbd` is what `K.markKeyboard` reads off `visualViewport`, and the sheet
+   lifts its bottom edge by exactly that. It is 0 wherever there is no visual viewport,
+   which is every desk browser, so nothing moves there. */
+.sheet{position:fixed;inset:0;bottom:var(--kbd,0px);background:var(--canvas);display:flex;flex-direction:column;z-index:20}
+.sheet-head{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 16px;border-bottom:1px solid var(--hair);font-size:15px;font-weight:600}
+.sheet-head button{min-height:44px;display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600}
+.sheet-body{flex:1;min-height:0;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.sheet-foot{display:flex;gap:8px;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--hair);flex-wrap:wrap}
+.sheet-foot .btn{flex:1}
+@media(min-width:900px){
+  .sheet{left:auto;top:56px;right:16px;bottom:16px;width:560px;max-width:calc(100vw - 32px);border:1px solid var(--hair-hi);background:var(--s1)}
+  .sheet.wide{width:840px}
+}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(72px + env(safe-area-inset-bottom));background:var(--s3);border:1px solid var(--hair-hi);
+  color:var(--ink);padding:12px;font-size:13px;z-index:30;overflow-wrap:anywhere;display:none}
+.toast.on{display:block}.toast.err{border-color:var(--crit)}
+@media(min-width:900px){.toast{left:auto;width:420px;bottom:16px}}
+
+/* ---------- the card dialog: new card, and the same form editing one ---------- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:flex;align-items:flex-start;
+  justify-content:center;padding:48px 16px;overflow:auto}
+.modal-card{width:720px;max-width:100%;max-height:calc(100dvh - 96px);background:var(--s1);border:1px solid var(--hair-hi);
+  display:flex;flex-direction:column}
+.modal-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--hair);flex:0 0 auto}
+.modal-body{padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px;flex:1 1 auto;min-height:0}
+.modal-body>*{flex:0 0 auto}
+.modal-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--hair);flex:0 0 auto}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.wide{grid-column:1 / -1}
+.flabel{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.fhelp{font-size:11px;color:var(--ink-2)}
+.checks{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px;padding:4px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.check{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;background:var(--s2);
+  border:1px solid var(--hair);color:var(--ink-2);font-size:13px;white-space:nowrap;cursor:pointer}
+.check.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft);font-weight:600}
+input[type="checkbox"]{width:16px;height:16px;min-height:0;padding:0;margin:0;background:transparent;border:0;accent-color:var(--accent)}
+.btn .key{font-family:var(--mono);font-size:10px}
+
+/* ---------- the inspector: the actions sit at the top and stay there ---------- */
+.split-pane{padding-top:0}
+.split-pane>.drawer-head{padding-top:14px}
+.drawer-title{display:flex;align-items:flex-start;gap:8px}
+.drawer-title .title{flex:1;min-width:0}
+.actionbar{position:sticky;top:0;z-index:2;background:var(--s1);border-bottom:1px solid var(--hair);
+  margin:0 -14px;padding:8px 14px;display:flex;flex-wrap:wrap;gap:8px}
+/* ---------- the card's actions in groups (V2-1) ----------
+ * A group with more than one live action is a split button: its button, then a caret
+ * that opens the rest (`K.splitButton`, ui.core.js). The two halves read as one control,
+ * so the caret shares the button's face and loses the border between them. The menu drops
+ * under the group, over the pane, in the surface ladder and the theme's hairline; every
+ * entry is its name over the line that says what it does. The phone never draws this menu
+ * (a strip that scrolls sideways would clip it): its caret opens the same entries in a
+ * sheet, and More actions lists them under the same headings (`.glist`). */
+.agroup{position:relative;display:inline-flex;align-items:stretch}
+.agroup>.amain{border-top-right-radius:0;border-bottom-right-radius:0}
+.agroup>.caret{padding:0 8px;min-width:28px;border-left-color:transparent;
+  border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-1px;font-size:15px;font-weight:400}
+.agroup>.caret.primary{border-left-color:color-mix(in srgb,var(--on-accent) 30%,var(--accent))}
+.agroup.open>.caret{background:var(--s3)}
+.agroup>.caret .cname{font-size:11px;font-weight:600;color:var(--ink-2);margin-right:4px}
+.agroup>.caret.primary .cname{color:inherit}
+.agroup.open>.caret.primary{background:var(--accent)}
+.amenu{position:absolute;top:calc(100% + 4px);left:0;z-index:5;min-width:280px;
+  max-width:min(360px,calc(100vw - 32px));background:var(--s1);border:1px solid var(--hair-hi);
+  display:flex;flex-direction:column;padding:4px 0}
+.amenu .mhead{padding:4px 12px;font-family:var(--mono);font-size:11px;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2)}
+.btn.mitem{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;
+  height:auto;min-height:44px;width:100%;padding:8px 12px;border:0;background:transparent;
+  white-space:normal;text-align:left;border-radius:0}
+.mitem:hover,.mitem:focus{background:var(--s2);outline:none}
+.mitem:focus-visible{box-shadow:inset 0 0 0 1px var(--accent)}
+.mitem.crit{color:var(--crit)}
+.mitem .mname{font-size:13px;font-weight:600}
+.mitem .mdesc{font-size:11px;font-weight:400;color:var(--ink-2);line-height:1.4}
+.glist{display:flex;flex-direction:column;gap:24px}
+.gsec{display:flex;flex-direction:column;gap:4px}
+.gsec .ghead{margin:0;padding:0 0 4px;border-bottom:1px solid var(--hair)}
+.gsec .btn.mitem{padding:8px 0}
+.gsec .mitem:hover,.gsec .mitem:focus{background:transparent}
+.gsec .mitem:focus-visible{box-shadow:none;outline:1px solid var(--accent);outline-offset:2px}
+.house-actions .agroup>.caret{min-width:24px;padding:0 4px}
+
+/* ---------- where he answers a gate ----------
+ * The one-line input this replaced sat in the card, submitted on Enter, and showed him
+ * about thirty characters of what he had typed. The field is in the sheet now
+ * (`saySheet` in ui.cards.js): four lines to start, grown with the text by `growDraft` up
+ * to 40% of the visible viewport and scrolling inside itself past that.
+ *
+ * 16px IS NOT A FIFTH TYPE SIZE. It is iOS's floor: a field under 16px makes Safari zoom
+ * the whole page the moment it takes focus, and then the deck is scrolled sideways with
+ * the keyboard up. It applies to this one control and nothing else on the page. */
+.saybox{display:flex;flex-direction:column;gap:8px;min-width:0}
+.saybox textarea{width:100%;min-height:112px;font-size:16px;line-height:1.5;resize:none;overflow:auto}
+.saybox textarea:read-only{opacity:.6;cursor:progress}
+/* The plan's own open questions, above the field he answers them in. Clipped to a preview
+   with one Show all, which is exactly what `.reading` does on the phone and for the same
+   two reasons: a scroller inside the sheet's own scroller is the nested scroll the phone
+   rule forbids, and a block cut flat by its edge reads as broken rather than as scrollable
+   (the audit's finding #2, in the other axis). The fade says there is more. */
+.sayq{background:var(--s2);padding:12px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.sayq.clip{max-height:180px;overflow:hidden;position:relative}
+.sayq.clip::after{content:'';position:absolute;left:0;right:0;bottom:0;height:48px;
+  background:linear-gradient(to bottom,transparent,var(--s2))}
+.notes{display:flex;flex-direction:column;border-top:1px solid var(--hair)}
+.note-row{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--hair);font-size:13px}
+.note-row:last-child{border-bottom:0}
+.note-row .at{font-family:var(--mono);font-size:11px;color:var(--ink-2);width:56px;flex:0 0 56px}
+.note-row .who{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);width:56px;flex:0 0 56px}
+.note-row .x{flex:1;color:var(--ink);overflow-wrap:anywhere}
+.spill.talk{color:var(--accent-ink);background:var(--accent-soft)}
+.spill.backlog{color:var(--ink-2);background:var(--s3)}
+.lane .empty{padding:8px}
+
+/* ---------- phone: the topbar is the header, the dock is the nav ---------- */
+.dock{position:fixed;left:0;right:0;bottom:0;display:flex;border-top:1px solid var(--hair);background:var(--s1);
+  padding-bottom:env(safe-area-inset-bottom);z-index:10}
+.dock-item{flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:8px;gap:4px;color:var(--ink-2);position:relative}
+.dock-item.on{color:var(--accent-ink)}
+.dock-item .ic{width:24px;height:24px;position:relative;display:flex;align-items:center;justify-content:center;font-size:15px}
+.dock-item .name{font-size:11px;line-height:1}
+.dock-item.on .name{font-weight:600}
+/* badge geometry: icon top sits 8px under the bar's border; top:-4px in a 24px box puts the
+   badge's top edge 4px below the border, never crossing it; right:-4px tucks it to the corner */
+.dock-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:16px;background:var(--crit);
+  color:#2A1411;font-size:10px;font-weight:600;font-family:var(--mono);line-height:16px;text-align:center}
+/* A CHIP STRIP IS ONE ROW THAT SCROLLS, AND IT STAYS INSIDE THE BOX AROUND IT.
+   Two things it used to get wrong on a phone. Its bleed was hardcoded at 16px, which is the
+   BODY's padding: inside a panel (12px) it hung 4px past the border on both sides, so it
+   takes the container's own `--padx` now. And `flex:0 0 auto` inside `.panel-head`, which
+   is a flex ROW, let it take its max-content width instead of scrolling: on Reviews that
+   was 1215px of chips inside a 356px panel, dragging the whole page 838px sideways.
+   `max-width:100%` is what clamps it back into the row it sits in. */
+.lanechips{display:flex;gap:8px;overflow-x:auto;padding:0 var(--padx) 4px;margin:0 calc(-1 * var(--padx));
+  scrollbar-width:none;flex:0 0 auto;min-width:0;max-width:100%;overscroll-behavior-x:contain}
+.lanechips::-webkit-scrollbar{display:none}
+/* THE EDGE SAYS THERE IS MORE. A chip cut flat by the box's edge reads as broken rather
+   than as scrollable, so the edge the strip can still be scrolled toward fades out.
+   `data-edge` is set by `K.markStrips` after every render and on the strip's own scroll,
+   because no CSS can ask where the reader left it. */
+.lanechips[data-edge="end"]{-webkit-mask-image:var(--fade-end);mask-image:var(--fade-end)}
+.lanechips[data-edge="start"]{-webkit-mask-image:var(--fade-start);mask-image:var(--fade-start)}
+.lanechips[data-edge="both"]{-webkit-mask-image:var(--fade-both);mask-image:var(--fade-both)}
+.lanechip{height:44px;padding:0 16px;border-radius:var(--pill);background:var(--s2);border:1px solid var(--hair);color:var(--ink-2);font-size:13px;
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;flex:0 0 auto}
+.lanechip.on{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent)}
+.lanechip.blocked.on{background:var(--crit-soft);color:var(--crit);border-color:var(--crit)}
+.lanechip .n{font-family:var(--mono);font-size:10px}
+.compact{display:flex;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--hair);min-height:44px;width:100%;color:inherit}
+.compact .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);width:48px;flex:0 0 48px}
+.compact .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the phone row says the three words on a second line: at 390 they do not fit beside a title */
+.compact.stack{flex-direction:column;align-items:stretch;gap:7px}
+.compact.stack .crow{display:flex;align-items:center;gap:12px}
+.compact.kin{padding-left:20px;position:relative}
+.compact.kin::before{content:'\21B3';position:absolute;left:4px;top:14px;font-family:var(--mono);font-size:10px;color:var(--ink-3)}
+.back{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 16px;font-size:15px;font-weight:600;border-bottom:1px solid var(--hair);flex:0 0 auto}
+
+@media(max-width:899px){
+  .body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  /* ---------- THE BOX CONTAINS ITS CONTENT ----------
+     `.body>.panel.grow{flex:1 1 auto}` and the scrollers under it are a DESK arrangement:
+     the panel takes the viewport's height and something inside it scrolls. On the phone the
+     PAGE is the scroller, so that same rule pinned the panel at one screen and let its
+     content paint below its own bottom border: 8592px of it on an Atlas page, with the
+     border stranded at the top of the document. Here the panel grows with what is in it and
+     every scroller inside it hands its axis back to the page, so a border drawn around
+     content is a border around ALL of it. */
+  .body>.panel.grow,.panel.grow,.panel.grow>.panel-body,
+  .panel.grow>.panel-body>.split,.panel.grow>.panel-body>.board{flex:0 0 auto;min-height:0}
+  .panel.grow>.panel-body>.split,.panel.grow>.panel-body>.board{overflow:visible}
+  .stack{overflow:visible;flex:0 0 auto}
+  /* a filter row takes the whole line: sharing it with a chip strip squeezed the search
+     field to 172px of a 356px panel */
+  .panel-head>.filters{flex:1 1 100%;min-width:0}
+  /* the segmented controls (the scanner's auto-review, model and orientation) are real
+     controls on a phone, and they measured 23px tall */
+  .toggle button,.dial button{min-height:44px;min-width:44px;padding:0 16px}
+  /* 4px between the header's items: three 44px icons (Voice, the switch, New card) beside the
+     drain pill leave the space name its full width at 390px (c-518). When the code has moved
+     the restart is a fourth and the name ellipsises, as the row was built to (the view name
+     first). */
+  .header{padding:12px 16px;gap:4px}
+  .iconbtn{width:44px;height:44px}
+  .pill{height:32px}
+  /* the drain pill is a control on the phone too (it opens the services sheet), so its hit box is 44px */
+  button.pill{height:44px}
+  /* ...and the dot alone, in a 44px box like the icons beside it (c-519) */
+  button.pill.dotonly{width:44px;padding:0;justify-content:center}
+  /* With Bosun's entry the row holds five 44px controls, and the view name, which the dock
+     already says, is the one that goes: it was down to "N." and still cost the space name
+     its last letters (c-519, measured at 390). */
+  .header .hint{display:none}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .strip{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px;padding:0 16px 4px}
+  .house{width:280px;flex:0 0 280px}
+  .split{flex-direction:column}
+  .split-list,.split-pane,.split-pane.drawer{width:100%;flex:0 0 auto}
+  /* the phone scrolls the page, not the column: a scroller of its own would squeeze every
+     row in it down to the 44px minimum below */
+  .split-table{flex:0 0 auto;overflow:visible}
+  .split-table>*,.split-list>*{flex:0 0 auto}
+  .row,.btn,.house-actions .btn,.actions .btn,.prow .btn,.seg .btn,.fchip,.chip,.slice,.treeslice,.treedone,.waitrow,.compact,input,select{min-height:44px}
+  .btn,.btn.sm{height:auto;min-width:44px}
+  .row-chips a,.prow a,.seg a{min-height:44px;display:inline-flex;align-items:center}
+  .chip{height:auto}
+  .kv-grid,.agrid{grid-template-columns:minmax(0,1fr)}
+  /* the split dialog stacks: a title, a brief and an after picker do not share 390px.
+     The number and the drop button stay on one line at the top, so a slice still reads
+     as one block rather than as four loose controls. */
+  .splitrow{flex-direction:column;align-items:stretch;position:relative;padding-right:52px;
+    border-top:1px solid var(--hair);padding-top:8px}
+  .splitrow select,.splitrow .chips{max-width:none}
+  .splitrow .n{width:auto;flex:0 0 auto}
+  .splitrow .iconbtn{position:absolute;right:0;top:8px}
+  .tiles{grid-template-columns:minmax(0,1fr)}
+  /* the segment's only control on the phone, so it is a real target in both axes:
+     44 tall came free from the head, 44 wide did not (it measured 40) */
+  .seg-open,.seg-head{min-height:44px}
+  .seg-open{min-width:44px;justify-content:flex-end;padding-left:8px}
+  .board{flex-direction:column;overflow:visible}
+  .lane{width:100%;flex:0 0 auto}
+  .filters input{width:100%}
+  /* ---------- NO SCROLLER INSIDE THE PAGE'S SCROLLER ----------
+     `max-height:320px;overflow:auto` is a DESK arrangement: a window onto a long block,
+     with a scrollbar beside it. On the phone the page is the scroller, so that window is a
+     scroll inside a scroll, which is the annoyance `<install>/history/docs/deck-mobile-audit.md` recorded as
+     recommendation 3. The block hands its axis back to the page here; a long one is
+     clipped to a preview instead, with one Show all under it that expands it into the
+     page's own scroll (`readingBlock` in ui.cards.js, `rendered` in ui.reviews.js). */
+  .reading,.rendered{max-height:none;overflow:visible}
+  .reading.clip,.rendered.clip{max-height:180px;overflow:hidden;position:relative}
+  .reading.clip::after,.rendered.clip::after{content:'';position:absolute;left:0;right:0;bottom:0;height:48px;
+    background:linear-gradient(to bottom,transparent,var(--s2))}
+  .showall{width:100%;justify-content:center}
+}
+@media(min-width:900px){
+  .stiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .rail{display:flex}
+  .controls{display:flex}
+  .dock{display:none}
+  .header .phone-only{display:none}
+}
+@media(max-width:899px){
+  .desk-only{display:none !important}
+}
+@media(max-width:899px){
+  /* the phone: a tap is 44px, so the house title, the tile links and the dialog's own
+     buttons grow to it, and the dialog's footer stacks rather than squeezing three
+     labels into one row */
+  .house-head .t{min-height:44px;display:flex;align-items:center}
+  .tile a,.prow a{min-height:44px;display:inline-flex;align-items:center}
+  .modal-foot{flex-direction:column;align-items:stretch}
+  .modal-foot .spacer{display:none}
+  .modal-foot .btn{width:100%;min-height:44px}
+  .check input[type="checkbox"]{width:22px;height:22px}
+  .modal{padding:0}
+  .modal-card{width:100%;max-width:none;height:100dvh;max-height:100dvh;border:0}
+  .modal-foot{padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  .modal-foot .btn{flex:1}
+  .form{grid-template-columns:minmax(0,1fr)}
+  .check{height:auto;min-height:44px}
+  .actionbar{margin:0 -12px;padding:8px 12px}
+  /* THE PHONE CARD PANE'S ROW (F2): at most three actions for the card's state and More
+     actions, two to a line, each a full cell of a 44px row. It comes AFTER the content, so
+     it does not stick to the top: reading the plan or the brief leads straight to it, and
+     a bar pinned over the notes below would cost a sixth of the screen to say it again.
+     An odd last cell takes the whole line rather than leaving half of one empty. */
+  .actionbar.phone{position:static;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    border-top:1px solid var(--hair)}
+  .actionbar.phone>.btn{width:100%;justify-content:center}
+  .actionbar.phone>:last-child:nth-child(odd){grid-column:1 / -1}
+  /* c-655: the hand-over says what it hands ("Hand 3 comments and the failing check to the
+     house"), which half a line cannot hold: it takes a whole line and wraps, the cells
+     around it close up, and the last cell takes its line when it would stand alone */
+  .actionbar.phone>[data-key^="hand-"]{height:auto;white-space:normal;padding:8px 12px;text-align:center}
+  /* c-653 with c-655: the shipping bar holds cells that take a whole line (the line where
+     Ship would be, Ship named for what it sends, the hand-over) among cells that take half,
+     in any mix, so which cell stands alone is no longer a matter of odd and even. It wraps
+     instead: a whole-line cell takes its line, two half cells share one, and a half cell
+     left alone on its line grows to fill it. */
+  .actionbar.phone:has(>.needs-line,>[data-key="ship"],>[data-key^="hand-"]){display:flex;flex-wrap:wrap}
+  .actionbar.phone:has(>.needs-line,>[data-key="ship"],>[data-key^="hand-"])>*{flex:1 1 calc(50% - 4px);width:auto;min-width:0}
+  .actionbar.phone>.shipsend,.actionbar.phone>.needs-line,.actionbar.phone>[data-key^="hand-"]{flex-basis:100%}
+  .split-pane>.drawer-head{padding-top:0}
+  .iconbtn.close{width:44px;height:44px}
+}
+
+/* the header's "code moved · restart" control: the desk's pill, and the phone's icon */
+.btn.pill.moved{height:28px;padding:0 12px;border-radius:var(--pill);border:1px solid var(--warn);color:var(--warn);background:transparent;font-family:var(--mono);font-size:11px;letter-spacing:.02em}
+.btn.pill.moved:hover{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.btn.pill.moved.pending,.btn.iconbtn.moved.pending{opacity:.6}
+.btn.iconbtn.moved{padding:0;border-color:var(--warn);color:var(--warn);background:transparent}
+
+/* ---------- the Board route ----------
+   The blackboard (`app/ui.board.js`, `docs/atlas/45-board.md`). Every value here is one of
+   the deck's own tokens, so a board follows the space switch like everything else, and the
+   budgets are the deck's: four type sizes, two weights, the 4px grid, 44px targets.
+   `.board` is already the kanban's lane container, so the route is `.boardroute`. */
+.boardroute .panel-body{display:flex;flex-direction:column;min-height:0;gap:8px}
+.board-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+.board-meta .title{flex:1 1 auto;min-width:0}
+.board-cols{display:flex;gap:12px;flex:1;min-height:0}
+.bchip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--pill);
+  background:var(--s2);border:1px solid var(--hair);font-family:var(--mono);font-size:10px;
+  color:var(--ink-2);white-space:nowrap;flex:0 0 auto;max-width:44vw;overflow:hidden;text-overflow:ellipsis}
+.bchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+/* A card's board wears ITS card's space colour, not the switch's: the saved list shows
+   boards from both spaces at once and they cannot all follow one palette. */
+.bchip.space-work{background:#0F2E2B;border-color:#5BD6C0;color:#8FE7D7}
+.bchip.space-personal{background:#302517;border-color:#D9A468;color:#EABF8C}
+.livedot{width:8px;height:8px;border-radius:8px;flex:0 0 auto;background:var(--accent);
+  box-shadow:0 0 0 3px var(--glow);animation:boardpulse 2s ease-in-out infinite}
+@keyframes boardpulse{0%,100%{opacity:1}50%{opacity:.35}}
+.bswitch{display:flex;border:1px solid var(--hair);border-radius:var(--pill);overflow:hidden;flex:0 0 auto}
+.bswitch button{min-height:28px;padding:0 12px;color:var(--ink-2);font-size:11px;font-weight:600;
+  font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+.bswitch button.on{background:var(--accent-soft);color:var(--accent-ink)}
+
+/* the stage: one frame, in a deck panel with a mono uppercase header */
+.bframe{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;
+  background:var(--s1);border:1px solid var(--hair)}
+.bframe-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--hair);
+  flex:0 0 auto;min-height:44px}
+.bcount{flex:0 0 auto}
+.bnav{width:44px;height:44px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  color:var(--ink-2);border:1px solid var(--hair);background:var(--s2);font-size:13px;font-weight:600}
+.bnav:disabled{opacity:.35;cursor:default}
+.bnav.fitbtn{width:auto;padding:0 12px;font-family:var(--mono);font-size:11px}
+.bnav.fitbtn.on{opacity:.55}   /* already fitted: still a button, quietly */
+.bframe-body{flex:1;min-height:0;overflow:auto;padding:12px}
+.bframe-body.empty{display:flex;align-items:center;justify-content:center}
+.bframe-body.kind-graph{padding:0;overflow:hidden;position:relative}
+
+/* the graph. `touch-action:none` is on THE STAGE ALONE, so a one finger drag pans the
+   diagram and the page never scrolls sideways under it. */
+.graphwrap{width:100%;height:100%;overflow:hidden;touch-action:none;cursor:grab}
+/* the diagram continues that way: the same answer a chip strip's `data-edge` gives, on the
+   axis the layout runs in (RIGHT on the desk, DOWN on the phone) */
+.graphwrap[data-more="x"]{-webkit-mask-image:var(--fade-end);mask-image:var(--fade-end)}
+.graphwrap[data-more="y"]{-webkit-mask-image:var(--fade-down);mask-image:var(--fade-down)}
+.graphwrap[data-more="xy"]{-webkit-mask-image:var(--fade-end),var(--fade-down);
+  mask-image:var(--fade-end),var(--fade-down);-webkit-mask-composite:source-in;mask-composite:intersect}
+.graphwrap:active{cursor:grabbing}
+.graphwrap.noelk::after{content:'the layout engine did not load';display:block;padding:12px;
+  color:var(--ink-3);font-size:11px}
+.graph{display:block;width:100%;height:100%}
+.gnode{cursor:pointer}
+.gnode rect.card{fill:var(--s2);stroke:var(--hair-hi);stroke-width:1}
+.gnode.mark-accent rect.card{stroke:var(--accent);stroke-width:2}
+.gnode.mark-good rect.card{stroke:var(--good);stroke-width:2}
+.gnode.mark-warn rect.card{stroke:var(--warn);stroke-width:2}
+.gnode.mark-crit rect.card{stroke:var(--crit);stroke-width:2}
+.gnode .gicon{color:var(--ink-2)}
+.gnode.mark-accent .gicon{color:var(--accent-ink)}
+.gnode.mark-good .gicon{color:var(--good)}
+.gnode.mark-warn .gicon{color:var(--warn)}
+.gnode.mark-crit .gicon{color:var(--crit)}
+/* THE OPEN NODE WINS OVER ITS MARK, and it is placed after the marks for that reason. A
+   mark is what the house said ABOUT a node; `on` is where he is looking right now, and it
+   has to read as "this one" on a node that is also marked crit. So it takes the accent
+   stroke back and adds a halo, which no mark uses. */
+.gnode.on rect.card{stroke:var(--accent);stroke-width:2}
+.gnode.on{filter:drop-shadow(0 0 6px var(--glow))}
+.gnode text.lbl{fill:var(--ink);font-family:var(--sans);font-size:15px;font-weight:600}
+.gnode text.sub{fill:var(--ink-2);font-family:var(--mono);font-size:13px}
+.ggroup rect.gbox{fill:transparent;stroke:var(--hair-hi);stroke-width:1;stroke-dasharray:4 4}
+.gtitles{pointer-events:none}
+.gtitle rect.gtitlebg{fill:var(--s1)}
+.gtitle text.glabel{fill:var(--ink-2);font-family:var(--mono);font-size:11px;text-transform:uppercase;
+  letter-spacing:.06em}
+.gedge path{stroke:var(--ink-3);stroke-width:1.5;fill:none}
+.gedge rect.elabel{fill:var(--s2);stroke:var(--hair);stroke-width:1}
+.gedge text.elabel{fill:var(--ink-2);font-family:var(--mono);font-size:13px}
+/* the 200ms entrance, one per node and edge as it arrives */
+.gnode,.gedge,.bstep,.bnote p,.cl,.btablewrap tr{transition:opacity .2s ease,transform .2s ease}
+.gnode.enter,.gedge.enter,.bstep.enter,.bnote p.enter,.cl.enter,.btablewrap tr.enter{opacity:0}
+.gnode.enter{transform:scale(.92)}
+
+/* the attachment bodies: a table, a note, a snippet, a file */
+.btablewrap{overflow-x:auto}
+.btablewrap table{width:100%;border-collapse:collapse}
+.btablewrap th{font-family:var(--mono);font-size:11px;font-weight:400;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2);text-align:left;padding:8px 12px;
+  border-bottom:1px solid var(--hair-hi);white-space:nowrap}
+.btablewrap td{padding:8px 12px;border-bottom:1px solid var(--hair);color:var(--ink)}
+.bnote{display:flex;flex-direction:column;gap:12px;max-width:64ch;color:var(--ink)}
+.bnote strong{font-weight:600;color:var(--ink)}
+.bnote code{font-family:var(--mono);font-size:11px;background:var(--s3);padding:0 4px;color:var(--ink)}
+.bcode{display:flex;flex-direction:column;height:100%}
+.bcodehead{padding:8px 12px;border-bottom:1px solid var(--hair);flex:0 0 auto}
+.bcodepre{flex:1;overflow:auto;margin:0;padding:12px;font-family:var(--mono);font-size:11px;
+  line-height:1.6;color:var(--ink);background:var(--s2)}
+.bcodepre .cl{white-space:pre}
+.bfile{display:flex;align-items:center;gap:12px;padding:12px;background:var(--s2);border:1px solid var(--hair)}
+.bfile .bficon{width:24px;height:24px;color:var(--ink-2);flex:0 0 auto}
+.bfile .bfinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.bfile .bfname{font-weight:600;color:var(--ink)}
+/* The download on a file frame (K6, K7): a link rather than a button, so the browser's own
+   Save is on it and a long press on the phone offers it. A 44px target either way. */
+.bfile .bfget{flex:0 0 auto;min-height:44px;display:inline-flex;align-items:center;
+  border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft);text-decoration:none}
+
+/* ---------- the ask box under the stage (K11, K12) ----------
+   One row, 56px, the width of the route: the field, Send, and the paperclip that puts a
+   file on this board. On the phone the field collapses behind Ask, because 390px cannot
+   hold a field and two 44px controls and still leave a field he can read what he typed in. */
+.bask{flex:0 0 auto;display:flex;flex-direction:column;gap:8px}
+.bask-row{display:flex;align-items:center;gap:8px;min-height:56px}
+.bask-in{flex:1 1 auto;min-width:0;height:44px;padding:0 12px;background:var(--s2);
+  border:1px solid var(--hair);color:var(--ink);font-family:var(--sans);font-size:15px}
+.bask-in:focus{outline:none;border-color:var(--accent)}
+.bask-in:disabled{opacity:.6}
+.bask-send,.bask-open,.bask-clip{flex:0 0 auto;min-height:44px}
+.bask-send{min-width:88px;justify-content:center}
+.bask-clip{width:44px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px}
+/* Send, while a turn is running: a turn into a house is tens of seconds, so the control
+   that started it has to be visibly still working. */
+.spin{width:16px;height:16px;border-radius:16px;border:2px solid var(--hair-hi);
+  border-top-color:var(--accent);animation:bspin .8s linear infinite;display:inline-block}
+@keyframes bspin{to{transform:rotate(360deg)}}
+/* The answer is a REPLY under the box and never a frame: what a house DREW is the board's
+   record, and what it said back to one question is not. */
+.bask-reply{display:flex;align-items:flex-start;gap:8px;padding:12px;background:var(--s1);
+  border:1px solid var(--hair);border-left:2px solid var(--accent)}
+.bask-reply.bad{border-left-color:var(--warn)}
+.bask-said{flex:1 1 auto;min-width:0;color:var(--ink);white-space:pre-wrap}
+.bask-shut{width:44px;height:44px;flex:0 0 auto}
+
+/* ---------- the three views of one board ----------
+   Diagram, outline, walk. They are one model shown three ways, so the pieces below are
+   SHARED between them: a table looks like a table wherever he meets it, and the node panel
+   and the outline draw an attachment with the same builders. */
+.bviews button{text-transform:capitalize;letter-spacing:0}
+
+/* diagram: the stage, and the open node's own column beside it */
+.bdiagram{display:flex;gap:12px;flex:1;min-width:0;min-height:0}
+.bstage{flex:1 1 auto;min-width:0}
+.bpanel{width:320px;flex:0 0 auto;display:flex;flex-direction:column;min-height:0;
+  border:1px solid var(--hair);background:var(--s1)}
+.bpanel.shut{width:44px;border:0;background:transparent;justify-content:flex-start}
+.bpanel-head{display:flex;align-items:center;gap:8px;padding:8px 12px;min-height:44px;
+  border-bottom:1px solid var(--hair);flex:0 0 auto}
+.bpanel-head .label{flex:1 1 auto;min-width:0}
+.bpanel-sub{padding:8px 12px 0;flex:0 0 auto}
+.bpanel-body{flex:1;min-height:0;overflow:auto;padding:12px}
+/* what hangs on a node, counted on the node itself: the diagram says WHERE the detail is
+   without showing it, and a tap is how he opens it */
+.gbadge circle{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1}
+.gbadge text{fill:var(--accent-ink);font-family:var(--mono);font-size:10px;font-weight:600}
+
+/* one attachment, in the panel or in the outline */
+.battachments{display:flex;flex-direction:column;gap:12px}
+.battach{display:flex;flex-direction:column;min-width:0;overflow:hidden;
+  border:1px solid var(--hair);background:var(--s2)}
+.battach-head{padding:8px 12px;border-bottom:1px solid var(--hair);color:var(--ink-2)}
+/* A snippet inside an attachment is sized by its CONTENT, not by the stage: `.bcode` used
+   to fill a frame that was the whole stage, and in a 320px panel `height:100%` collapsed
+   it and let the long lines run out of the card. It scrolls in both directions instead,
+   under a ceiling, because a forty line snippet must not push the next attachment off. */
+.battach .bcode{height:auto;min-height:0;min-width:0}
+.battach .bcodepre{max-height:220px;min-width:0;overflow:auto}
+/* and a table in the 320px panel gets the tighter grid, so six columns still read */
+.bpanel .btablewrap th,.bpanel .btablewrap td{padding:6px 8px}
+.bstep{display:flex;gap:12px;align-items:flex-start;background:var(--s2);
+  border:1px solid var(--hair);padding:12px;color:var(--ink)}
+.bstep .n{flex:0 0 auto;width:20px}
+.bstep .t{flex:1 1 auto;min-width:0}
+
+/* outline: the whole board as something to read, one centred column. This replaced "All
+   frames", and it is the view that answers "just let me read the thing". */
+.boutline{flex:1;min-height:0;overflow:auto;width:100%}
+.boutline>*{max-width:880px;margin:0 auto}
+.bo-board,.bo-group{display:flex;flex-direction:column;gap:12px;padding:0 0 20px}
+.bo-group>h3{position:sticky;top:0;background:var(--s0);padding:8px 0;z-index:1;
+  border-bottom:1px solid var(--hair)}
+.bo-node{display:flex;flex-direction:column;gap:8px;padding:12px 0 0}
+.bo-node-head{display:flex;align-items:flex-start;gap:12px}
+.bo-icon{width:24px;height:24px;color:var(--ink-2);flex:0 0 auto;margin-top:2px}
+.bo-names{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.bo-names h4{font-size:15px;font-weight:600;color:var(--ink)}
+.bo-node .battachments{padding-left:36px}
+.bchip.mark-accent{border-color:var(--accent);color:var(--accent-ink)}
+.bchip.mark-good{border-color:var(--good);color:var(--good)}
+.bchip.mark-warn{border-color:var(--warn);color:var(--warn)}
+.bchip.mark-crit{border-color:var(--crit);color:var(--crit)}
+
+/* walk: one step at a time, over a compact diagram with that step's node lit */
+.bwalk{display:flex;flex-direction:column;gap:12px;flex:1;min-width:0;min-height:0}
+.walkgraph{flex:1 1 auto;min-height:0}
+.bwalk-step{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding:12px;
+  border:1px solid var(--hair);background:var(--s1)}
+.bwalk-head{display:flex;align-items:center;gap:8px}
+.bwalk-text{font-size:15px;line-height:1.6;color:var(--ink)}
+.bwalk-keys{flex:0 0 auto}
+/* THE STEP AS A CALLOUT FROM ITS LIT NODE (Z1, lane Z; app/ui.boardcallout.js). A layer over
+   the graph's stage, inside its `data-morph="skip"` host: a card on the side of the node with
+   room, a leader from the node's edge to it, and a caption bar along the bottom when the stage
+   is a phone's, the node is cut by the edge, or no side has room. The card never takes a
+   pointer, so a drag through it still pans the diagram. */
+.wcall-layer{position:absolute;inset:0;pointer-events:none;z-index:2}
+.wcall-lead{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.wcall-lead line{stroke:var(--accent);stroke-width:2}
+.wcall-lead circle{fill:var(--accent)}
+.wcall{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;padding:12px;
+  background:var(--s1);border:1px solid var(--accent);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.wcall-n{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.wcall-text{font-size:15px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}
+.wcall-caption{position:absolute;left:8px;right:8px;bottom:8px;display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:var(--s1);border:1px solid var(--accent);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:auto}
+.wcall-words{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
+.wcall-caption .bnav{display:none}
+.wcall-layer.nav .wcall-caption .bnav{display:flex}
+.wcall[hidden],.wcall-caption[hidden]{display:none}
+/* the phone's walk outside full screen: the caption is the row under the diagram, in flow */
+.wcall-caption.inflow{position:static;padding:0;border:0;background:none;box-shadow:none}
+
+/* Saved: two sections, so the level a board sits at is never in doubt */
+.bsaved{display:flex;flex-direction:column;gap:20px}
+.bsaved-section{display:flex;flex-direction:column;gap:8px}
+.bsaved-item{display:flex;flex-direction:column;gap:8px;padding:12px;width:100%;min-height:44px;
+  border:1px solid var(--hair);background:var(--s1);color:var(--ink)}
+.bsaved-item.on{border-color:var(--accent)}
+.bsaved-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bsaved-head .t{flex:1 1 auto;min-width:0;font-size:15px;font-weight:600}
+.bsaved-chips{display:flex;gap:8px;flex-wrap:wrap}
+/* THE LIST'S PANEL GROWS WITH ITS ROWS (c-562). As a `panel grow` it took the desk's one
+   screen and its body no scroller, so the rows ran on below its bottom border while `.body`
+   scrolled them. It fills the screen when the list is short and grows when it is long, and
+   `.body` stays the page's one scroller, desk and phone alike. */
+.body>.panel.blist-panel{flex:1 0 auto}
+.blist-panel>.panel-body{flex:1 0 auto}
+/* The list grouped by card and by topic, one search and one chip strip (C5) */
+.blist-search input{width:100%;max-width:480px}
+.blist-chips{margin-top:-8px}
+.blist-group{display:flex;flex-direction:column;gap:8px}
+.blist-group+.blist-group{margin-top:12px}
+.blist-head{display:flex;align-items:center;gap:8px;min-width:0;padding:4px 0}
+.blist-head .t{flex:0 1 auto;min-width:0;font-size:13px;font-weight:600;color:var(--ink-2)}
+.blist-head>.mono,.blist-head>.bchip{flex:0 0 auto;white-space:nowrap}
+.blist-hit{display:block;color:var(--ink-2);overflow-wrap:anywhere}
+/* A group of more than one board is a STACK until he opens it (W1, W2): one row with the
+   group's facts, its count and its newest board, and the edges of the boards behind it drawn
+   as two hairline ledges under it, in the theme's own surface and hairline, not a shadow. */
+.blist-stack{position:relative;display:flex;flex-direction:column;gap:8px;width:100%;min-height:44px;
+  padding:12px;margin-bottom:12px;border:1px solid var(--hair-hi);background:var(--s1);color:var(--ink)}
+.blist-stack::before,.blist-stack::after{content:'';position:absolute;height:6px;border:1px solid var(--hair-hi);
+  border-top:0;background:var(--s2);pointer-events:none}
+.blist-stack::before{top:100%;left:4px;right:4px}
+.blist-stack::after{top:calc(100% + 6px);left:12px;right:12px}
+.blist-stack:hover,.blist-stack:hover::before,.blist-stack:hover::after{border-color:var(--accent)}
+.blist-stack .blist-head{padding:0}
+.blist-stack .blist-head .t{font-size:15px;color:var(--ink)}
+.blist-newest{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px;color:var(--ink-2)}
+.blist-newest .ellip{flex:0 1 auto;min-width:0}
+.blist-count{flex:0 0 auto}
+.blist-toggle{display:flex;flex-direction:column;gap:4px;width:100%;min-height:44px;padding:4px 13px 4px 0}
+.blist-stack .blist-head::after,.blist-toggle .blist-head::after{content:'';flex:0 0 auto;margin-left:auto;width:8px;height:8px;
+  border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:translateY(-2px) rotate(45deg)}
+.blist-toggle .blist-head::after{transform:translateY(2px) rotate(-135deg)}
+.blist-toggle .blist-head{padding:0}
+
+@media(max-width:899px){
+  /* THE PHONE KEEPS ALL THREE VIEWS, in one column. The diagram fills what is left of the
+     viewport and a tapped node opens a DRAWER across the bottom of it rather than a column
+     beside it; the outline is the same document at the full width; the walk puts the
+     diagram on top and the step under it, which is the desk's shape stacked. */
+  .board-cols{flex-direction:column;min-height:0}
+  .bdiagram{flex-direction:column}
+  .bframe{min-height:52dvh}
+  .bframe-head{flex-wrap:wrap}
+  .boardroute .panel-body{min-height:0}
+  .bswitch button{min-height:44px}
+  .bsaved-item{min-height:44px}
+  .boutline>*{max-width:none}
+  .bpanel{width:auto;flex:0 0 auto}
+  /* IN FLOW, NOT STUCK TO THE BOTTOM. A sticky drawer sits over the diagram the moment the
+     two together are taller than the viewport, which on a 390x844 phone is always, and the
+     diagram he tapped in is left as a sliver behind it. In flow he lands on the whole
+     thumbnail with the drawer's head (and its close) right under it, and scrolls to read
+     on. The shadow and the top border are what still say it is a layer. */
+  .bpanel.drawer{box-shadow:0 -8px 24px rgba(0,0,0,.35)}
+  /* A DRAWER SHRINKS THE DIAGRAM RATHER THAN BEING SQUEEZED BY IT. He tapped the node to
+     read what hangs on it, so the content gets the room and the diagram keeps just enough
+     to hold its shape. An explicit height rather than a min: the stage's own min is 52dvh,
+     and a min cannot take room back from a min. `stageHost` lays the graph out again when
+     the drawer opens, because an ELK layout writes the svg's own height attribute and the
+     wrap cannot shrink under it. */
+  .bdiagram.open .bstage{height:30dvh;min-height:0;flex:0 0 auto}
+  .bpanel.shut{display:none}
+  .bo-node .battachments{padding-left:0}
+  .bwalk .walkgraph{min-height:34dvh;flex:0 0 auto}
+  /* the ask row's own phone shape: Ask and the paperclip, and the field once he taps Ask.
+     16px on the field is iOS's zoom floor, the same rule the gate's answer field keeps. */
+  .bask-in{font-size:16px;width:100%}
+  .bask-row{flex-wrap:wrap}
+  .bask-open{flex:1 1 auto}
+}
+
+/* THE FULL-SCREEN BOARD (C6). `body.board-full` hides the deck's chrome; the board is one
+   fixed layer the size of the screen: the stage, and a slim rail on the desk (320px open,
+   56px of icons shut) or a bottom sheet over the diagram on the phone, above the home
+   indicator. The Fullscreen API is the desk's; the phone's is this same layer alone. */
+body.board-full .rail,body.board-full .header,body.board-full .controls,
+body.board-full .dock{display:none}
+body.board-full .body{padding:0}
+.bfull{position:fixed;inset:0;height:100dvh;display:flex;z-index:15;background:var(--canvas)}
+.bfull-stage{flex:1 1 auto;min-width:0;min-height:0;border:0}
+.bfull-outline{overflow:auto;padding:16px}
+.bfull-rail{flex:0 0 320px;width:320px;display:flex;flex-direction:column;min-height:0;
+  border-left:1px solid var(--hair);background:var(--s1)}
+.bfull-rail.shut{flex:0 0 56px;width:56px;align-items:center;gap:8px;padding:8px 0}
+.bfull-icons{display:flex;flex-direction:column;gap:8px}
+.bfull-icons .bnav.on{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent)}
+.bfull-head{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--hair);flex:0 0 auto}
+.bfull-head .t{flex:1 1 auto;min-width:0;font-size:15px;font-weight:600}
+.bfull-body{flex:1 1 auto;min-height:0;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.bfull-body .bswitch{align-self:flex-start}
+.bfull-items{display:flex;flex-direction:column;gap:8px}
+.bfull-walk{display:flex;flex-direction:column;gap:8px}
+.bfull-walk .bwalk-head{display:flex;align-items:center;gap:8px}
+@media(max-width:899px){
+  /* ON THE PHONE THE RAIL IS A BOTTOM SHEET OVER THE DIAGRAM, never a drawer (P2, I8): its
+     head row is always there, and it opens upwards to at most 60dvh. It owns the safe area. */
+  .bfull{flex-direction:column}
+  .bfull-stage{height:100dvh;flex:1 1 auto}
+  .bfull-sheet{position:fixed;left:0;right:0;bottom:0;max-height:60dvh;display:flex;flex-direction:column;
+    background:var(--s1);border-top:1px solid var(--hair);box-shadow:0 -8px 24px rgba(0,0,0,.35);
+    padding-bottom:env(safe-area-inset-bottom);z-index:16}
+  .bfull-sheet .bfull-body{max-height:calc(60dvh - 64px)}
+  /* the caption sits above the sheet's head row, which is always there (62px) */
+  .bfull .wcall-caption{bottom:calc(72px + env(safe-area-inset-bottom))}
+}
+
+/* ---------- deleting a board (lane BD) ----------
+   A row's menu sits beside its button (a button cannot hold another), a stack's beside its
+   toggle, the board page's at the end of its header row. Every menu button is a 44px target
+   on the desk and the phone alike, and every item prints its line under its name, because
+   the phone has no hover. The confirm is the card dialog's frame, narrower, and on the phone
+   a sheet from the bottom rather than a whole screen for two sentences. */
+.bsaved-row{display:flex;align-items:stretch;min-width:0}
+.bsaved-row>.bsaved-item{flex:1 1 auto;min-width:0}
+.bsaved-row>.bmenu-wrap .bmenu-btn{border-left:0;height:auto;align-self:stretch}
+.bmenu-wrap{position:relative;flex:0 0 auto;display:flex}
+.bmenu-btn{width:44px;height:44px;min-height:44px;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--hair);background:var(--s1);color:var(--ink-2);font-size:18px;line-height:1;cursor:pointer}
+.bmenu-btn:hover,.bmenu-wrap.open .bmenu-btn{color:var(--ink);border-color:var(--hair-hi);background:var(--s2)}
+.bmenu-btn:focus-visible,.bmenu-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.bmenu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;width:300px;max-width:calc(100vw - 32px);
+  display:flex;flex-direction:column;background:var(--s2);border:1px solid var(--hair-hi);
+  box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.bmenu-item{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:44px;padding:10px 12px;
+  text-align:left;background:none;border:0;color:var(--ink);cursor:pointer;width:100%}
+.bmenu-item+.bmenu-item{border-top:1px solid var(--hair)}
+.bmenu-item:hover{background:var(--s3)}
+.bmenu-item.crit .bmenu-name{color:var(--crit)}
+.bmenu-name{font-size:13px;font-weight:600}
+.bmenu-line{font-size:11px;line-height:1.45;color:var(--ink-2);white-space:normal}
+.blist-headrow{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.blist-headrow>.blist-stack,.blist-headrow>.blist-toggle{flex:1 1 auto;min-width:0}
+.board-meta .bmenu-wrap{margin-left:4px}
+.board-meta .bmenu-btn{width:44px;height:32px;min-height:32px}
+.btrash-row{align-items:center;gap:8px}
+.btrash-item{cursor:default}
+.brestore{min-height:44px;height:44px;padding:0 16px}
+.bgone-actions{display:flex;gap:8px;margin:8px 0}
+.bconfirm{width:520px}
+.bconfirm .modal-body{gap:8px}
+.bconfirm .modal-body p{margin:0;font-size:13px;line-height:1.5}
+.bconfirm-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.bconfirm-warn{color:var(--warn)}
+.bconfirm .modal-foot .btn{min-height:44px}
+@media(max-width:899px){
+  .board-meta .bmenu-btn{height:44px;min-height:44px}
+  /* the header row wraps on the phone: the menu keeps to the right edge, so the list it
+     opens (anchored on its right) stays on the screen */
+  .board-meta .bmenu-wrap{margin-left:auto}
+  .bconfirm-scrim{align-items:flex-end}
+  .bconfirm{height:auto;max-height:85dvh;border-top:1px solid var(--hair-hi)}
+  .bmenu{width:min(300px,calc(100vw - 32px))}
+}
+
+/* ---------- the receipt a gate leaves once it is answered (c-537, app/ui.receipt.js) ---------- */
+.receipt{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--hair-hi);background:var(--s1)}
+.receipt-said{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:13px}
+.receipt-mark{width:20px;height:20px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;align-self:center;background:var(--s3);color:var(--ink-2);font-size:11px}
+.receipt-mark.ok{background:var(--good-soft);color:var(--good)}
+.receipt-now{display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+.receipt-now .dot{align-self:flex-start;margin-top:5px}
+.receipt-now.tone-accent .dot{background:var(--accent)}
+.receipt-now.tone-good .dot{background:var(--good)}
+.receipt-now.tone-warn .dot{background:var(--warn)}.receipt-now.tone-warn{color:var(--warn)}
+.receipt-now.tone-crit .dot{background:var(--crit)}.receipt-now.tone-crit{color:var(--crit)}
+.receipt-now-text{flex:1;min-width:0}
+.receipt-log{font-size:11px;flex:0 0 auto}
+.receipt-link{font-size:13px}
+.receipt-docs{display:flex;gap:8px;flex-wrap:wrap}
+/* c-600: a shipping card's standing batch of review replies (app/ui.shipping.js) */
+.shipsec{display:flex;flex-direction:column;gap:10px}
+/* c-655: each kind's automatic handling, said in words with the tap that turns it */
+.shipautos{display:flex;flex-direction:column;gap:8px}
+.shipauto{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--hair-hi);border-left:2px solid var(--warn);background:var(--s2)}
+.shipauto.on{border-left-color:var(--good)}
+.shipauto p{margin:0;color:var(--ink)}
+.shipauto .row-actions{display:flex;gap:8px;flex-wrap:wrap}
+.shiprow{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--hair-hi);background:var(--s2)}
+.shiprow.his{border-left:2px solid var(--accent)}
+.shipsent{display:flex;flex-direction:column;gap:8px}
+.shiprow.his .quote{white-space:pre-wrap}
+.shiprow .quote{border-left:2px solid var(--hair-hi);padding-left:8px;color:var(--ink-2)}
+.shipsum{font-weight:600}
+.shipreply{white-space:pre-wrap}
+.shipreply.dropped{text-decoration:line-through;color:var(--ink-2)}
+.shipdiff pre{max-height:320px;overflow:auto;font-size:11px;white-space:pre}
+.shiprow .pseg{display:flex;border:1px solid var(--hair-hi);background:var(--s2);align-self:flex-start}
+.shiprow .pseg button{padding:0 14px;min-height:36px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.shiprow .pseg button.on{background:var(--s3);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.shiprow textarea{width:100%;box-sizing:border-box}

@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""The forced command on Bosun's ssh key: git fetch and push on this checkout only
+(`keel/gitgate.py`)."""
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from keel import gitgate  # noqa: E402
+
+try:
+    argv = gitgate.gate_argv(os.environ.get("SSH_ORIGINAL_COMMAND"), ROOT)
+except gitgate.GateRefused as refusal:
+    print(f"keel-git-gate: {refusal}", file=sys.stderr)
+    sys.exit(1)
+os.execvpe(argv[0], argv, gitgate.gate_env())

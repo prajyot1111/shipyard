@@ -1,0 +1,63 @@
+# Keel's general flow (c-640): what a space whose pack reaches a code host has until it
+# imports its own. A card's branch is cut from its base, the house opens a draft {change},
+# your Approve outcome publishes it, and you or a teammate merge it on the code host. Review that
+# arrives while it waits (comments, a failing check) is kept on the card until you hand it to
+# the house, or goes to the house by itself when the space turns that on
+# (`ship_auto_comments`, `ship_auto_checks`; both off by default). This file is a PICTURE of
+# what the pack and Keel do: it has no move of your own, so it adds no button. Approve
+# outcome and Ship are the card's own buttons, drawn here where they act, and changing a
+# move here changes the drawing, not what happens (Atlas 64). `{change}` is the space's word
+# for a pull request. A space's own flow is `<install>/spaces/<space>/flow.toml`.
+name = "General"
+description = "Branch from the base, a draft {change}, your approval publishes it, you or a teammate merge it."
+
+[[branch]]
+id = "card"
+label = "card branch"
+kind = "card"
+
+[[branch]]
+id = "base"
+label = "{base}"
+kind = "base"
+
+[[move]]
+id = "draft"
+label = "Draft {change}"
+from = "card"
+to = "base"
+by = "house"
+step = "pr"
+stages = ["building"]
+about = "The house pushes its branch and opens a draft before it asks for your approval: after its own review, or before it when the space runs preship first, so the checks run beside the review."
+
+[[move]]
+id = "publish"
+label = "Approve outcome"
+from = "card"
+to = "base"
+by = "keel"
+step = "publish"
+stages = ["review"]
+group = "Decide"
+about = "Your approval marks the {change} ready for review."
+
+[[move]]
+id = "ship"
+label = "Ship"
+from = "card"
+to = "base"
+by = "keel"
+step = "ship"
+stages = ["shipping"]
+group = "Decide"
+about = "Pushes the house's fixes to review comments and posts the replies you kept."
+
+[[move]]
+id = "merge"
+label = "Review and merge"
+from = "card"
+to = "base"
+by = "colleague"
+stages = ["shipping"]
+about = "You or a teammate review and merge the {change} on {codehost_name}. Shipyard never merges it. The card is done once it is merged."

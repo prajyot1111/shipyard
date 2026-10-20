@@ -1,0 +1,4 @@
+body { font-family: system-ui, sans-serif; margin: 32px; }
+table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+td:last-child, th:last-child { text-align: right; }

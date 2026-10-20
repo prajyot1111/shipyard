@@ -1,0 +1,121 @@
+{
+  "note": [
+    "THE ONE PLACE THE SWITCH'S RULES ARE PINNED (V10, c-313). The effective mode of a judge",
+    "key is read twice in this repo, by keel/judges.py under Python 3.14 and by",
+    "voice/harbor_voice/judges.py under the voice venv's 3.12, because the two run in",
+    "different interpreters and neither may import the other. So both suites read these",
+    "cases: tests/test_judges.py and bin/keel-voice-selftest. A rule that changes on one side",
+    "and not the other fails here rather than in a turn.",
+    "",
+    "Each case gives the [voice.judges] and [voice.judge_floors] tables a keel.toml would",
+    "carry, the state/voice/judges.json override, and the effective answer per key: the mode,",
+    "where it came from, and whether it was held back from `on` for want of a floor."
+  ],
+  "cases": [
+    {
+      "name": "as shipped: every key shadow, from the default, no floor anywhere",
+      "defaults": {
+        "preturn.complete": "shadow",
+        "preturn.addressed": "shadow",
+        "preturn.route": "shadow",
+        "narrate": "shadow",
+        "preturn.card": "shadow",
+        "preturn.prefetch": "shadow",
+        "preturn.repair": "shadow",
+        "preturn.bargein": "shadow"
+      },
+      "floors": {},
+      "override": {},
+      "expect": {
+        "preturn.complete": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.addressed": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.route": {"mode": "shadow", "from": "default", "held": false},
+        "narrate": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.card": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.prefetch": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.repair": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.bargein": {"mode": "shadow", "from": "default", "held": false}
+      }
+    },
+    {
+      "name": "the override wins over the default, key by key",
+      "defaults": {
+        "preturn.complete": "shadow",
+        "preturn.addressed": "shadow",
+        "preturn.route": "shadow",
+        "narrate": "shadow"
+      },
+      "floors": {},
+      "override": {"preturn.route": "off"},
+      "expect": {
+        "preturn.complete": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.addressed": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.route": {"mode": "off", "from": "override", "held": false},
+        "narrate": {"mode": "shadow", "from": "default", "held": false}
+      }
+    },
+    {
+      "name": "a key nothing names reads off, never shadow: the fallback never starts sending text out",
+      "defaults": {"narrate": "shadow"},
+      "floors": {},
+      "override": {},
+      "expect": {
+        "preturn.complete": {"mode": "off", "from": "fallback", "held": false},
+        "preturn.addressed": {"mode": "off", "from": "fallback", "held": false},
+        "preturn.route": {"mode": "off", "from": "fallback", "held": false},
+        "narrate": {"mode": "shadow", "from": "default", "held": false}
+      }
+    },
+    {
+      "name": "on with no floor is held at shadow, because on without a floor has no meaning",
+      "defaults": {
+        "preturn.complete": "shadow",
+        "preturn.addressed": "shadow",
+        "preturn.route": "on",
+        "narrate": "shadow"
+      },
+      "floors": {},
+      "override": {},
+      "expect": {
+        "preturn.complete": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.addressed": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.route": {"mode": "shadow", "from": "default", "held": true},
+        "narrate": {"mode": "shadow", "from": "default", "held": false}
+      }
+    },
+    {
+      "name": "on with a floor stands, and the floor is carried through",
+      "defaults": {
+        "preturn.complete": "shadow",
+        "preturn.addressed": "shadow",
+        "preturn.route": "on",
+        "narrate": "shadow"
+      },
+      "floors": {"preturn.route": 0.99},
+      "override": {},
+      "expect": {
+        "preturn.complete": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.addressed": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.route": {"mode": "on", "from": "default", "held": false, "floor": 0.99},
+        "narrate": {"mode": "shadow", "from": "default", "held": false}
+      }
+    },
+    {
+      "name": "a mode that is not a mode, and a key that is not a key, are both ignored",
+      "defaults": {
+        "preturn.complete": "loud",
+        "preturn.addressed": "shadow",
+        "preturn.route": "shadow",
+        "narrate": "shadow"
+      },
+      "floors": {},
+      "override": {"narrate": "sometimes", "preturn.nonsense": "on"},
+      "expect": {
+        "preturn.complete": {"mode": "off", "from": "fallback", "held": false},
+        "preturn.addressed": {"mode": "shadow", "from": "default", "held": false},
+        "preturn.route": {"mode": "shadow", "from": "default", "held": false},
+        "narrate": {"mode": "shadow", "from": "default", "held": false}
+      }
+    }
+  ]
+}

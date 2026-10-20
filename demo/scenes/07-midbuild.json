@@ -1,0 +1,43 @@
+{
+  "scene": "7. Mid-build check: his line 3, asked of the export card's own session (keel converse)",
+  "seed": "live: the export card building, its house idle",
+  "start": "/segments/voice/app/?connect={{card}}",
+  "mic": "line-3.wav",
+  "harbor": [
+    "How's the export card going?"
+  ],
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scale": 2,
+  "hero": "answered",
+  "names": {
+    "mic": "#mic",
+    "who": "#who",
+    "said": ".v-turn.latest .v-said",
+    "answer": ".v-turn.latest .v-answer"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "#mic",
+      "label": "connected",
+      "pause": 2500
+    },
+    {
+      "do": "hold",
+      "target": "#mic",
+      "ms": 4800,
+      "label": "speak",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "for": "(document.querySelector('.v-turn.latest .v-answer') || {}).textContent?.length > 20 && !document.querySelector('.v-turn.latest .v-answer').closest('.v-turn').className.includes('pending')",
+      "timeout": 240000,
+      "label": "answered",
+      "pause": 8000
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+# The GitHub pack (c-689): a code host and nothing else. Pull requests on github.com, driven
+# through gh, GitHub's command line tool, and plain git. No tracker, no token, no HTTP
+# client: gh holds the sign-in and this pack asks it to act. docs/atlas/62-packs.md,
+# "The GitHub pack", says what it does, what it needs and what it never does.
+name = "github"
+version = "1"
+description = "GitHub through gh: when you approve a card, Shipyard marks its pull request ready as you and watches it for comments and failing checks. You merge on GitHub. When you ask, it also brings you the pull requests that wait on your review."
+
+[adapter]
+spaces = ["work"]
+
+[provides]
+rules = ["rules/house.md", "rules/comments.md"]
+skills = []
+pipeline = "pipeline.md"
+config_example = "config.example.toml"
+
+# A code host, and the pull requests that wait on your review (c-730: `review`, and the
+# Reviews gear's `providers/reviews`). No tracker, no CI page, and no `pr --flow` (a flow
+# move of yours that opens a second pull request).
+[capabilities]
+codehost = true
+reviews = true
+routes = ["reviews"]
+
+# The pack reads the commands its houses run: `guard <id>` (gh_fence.py), asked by Keel's
+# house guard on every Bash call. `tools` are the command words it reads.
+[guard]
+tools = ["gh"]
+
+[terms]
+change = "pull request"
+changes = "pull requests"
+change_short = "PR"
+changes_short = "PRs"
+codehost_name = "GitHub"
+
+[space]
+house_review = true
+# Reviews start off: a space on this pack is brought review requests only once the user
+# says so (Where finished work goes asks, c-730); its own `review_scan = true` wins.
+review_scan = false
+
+# Each requirement is a check (`./ready <name>`, exit 0 when ready) with a reason (`why`)
+# and a fix (`fix`), both plain sentences. Keel shows the fix where the check fails (Setup,
+# the first-run step, `keel doctor`). A `command` is written only where ONE line really does
+# the fix, which is the sign-in alone: installing gh differs by system, a remote needs the
+# repo's own address, and access is the repository owner's to give. `done_when` says how
+# you know it worked. `./ready` with no name prints all four as JSON
+# with the specific sentences: which account, which repo, which address (gh_ready.py).
+[[requires]]
+name = "gh"
+kind = "command"
+check = "./ready gh"
+for = ["codehost", "reviews"]
+why = "gh is GitHub's command line tool. Shipyard uses it to open pull requests as you, and to find the ones that wait on your review, so it has to be installed."
+fix = "Install it, then check again. On macOS: brew install gh. On Linux: sudo apt install gh (Debian, Ubuntu) or sudo dnf install gh (Fedora), or the line for your system at https://github.com/cli/cli#installation. Shipyard never installs it for you."
+done_when = "`gh --version` prints a version."
+
+[[requires]]
+name = "GitHub sign-in"
+kind = "secret"
+check = "./ready sign-in"
+for = ["codehost", "reviews"]
+why = "Shipyard opens pull requests and posts your reviews as you, so gh has to be signed in to GitHub. gh keeps the sign-in; Shipyard never reads or stores it."
+fix = "Run gh auth login in a terminal. Choose GitHub.com, then HTTPS, then sign in with your browser. Then check again."
+command = "gh auth login"
+done_when = "`gh auth status` names your account on github.com."
+
+[[requires]]
+name = "GitHub address"
+kind = "command"
+check = "./ready address"
+for = ["codehost", "reviews"]
+why = "This connection only works for repositories on github.com, so each repo of the space needs a github.com address as its remote."
+fix = "If the repo lives on GitHub, point its remote there: in the repo's folder, run git remote set-url origin https://github.com/OWNER/REPO.git. If it lives somewhere else, keep its work on this machine and push when you say."
+done_when = "`git remote get-url origin` in the repo's folder prints a github.com address."
+
+[[requires]]
+name = "GitHub access"
+kind = "secret"
+check = "./ready access"
+for = ["codehost"]
+why = "Shipyard pushes a card's branch and opens its pull request as you, so the signed-in account needs write access to each repository. Seeing it is not enough."
+fix = "See who you are signed in as with gh auth status. Switch accounts with gh auth switch, or sign in with one that has write access with gh auth login, or ask the repository's owner for write access."
+
+# Its own first-run step: done once the four checks pass in each space on the pack.
+[[setup]]
+id = "connect"
+title = "Connect GitHub"
+text = "setup/connect.md"
+for = ["codehost"]
+requires = ["gh", "GitHub sign-in", "GitHub address", "GitHub access"]

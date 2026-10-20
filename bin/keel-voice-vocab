@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""keel-voice-vocab - the setup's vocabulary, harvested rather than typed.
+
+    keel-voice-vocab generate [--offline <state.json>] [--dry-run]
+
+Regenerates the harvested section of `etc/dictation-vocabulary.md` (and the matching
+harvested section of whichever `adapters/<employer>/dictation-vocabulary.md` is
+currently installed, the work-side half) from the live state document, per c-221 item
+5: the vocabulary this setup uses should be generated from the stores that already
+hold the names, not hand-typed and left to rot.
+
+NO EMPLOYER NAME LIVES HERE. `packs/work/drift-terms` lists it, and this script finds
+the work-side file by GLOB rather than by name, exactly so this file needs no edit the
+day that adapter directory is deleted: no match just means no work-side half to write.
+
+`--offline` reads a saved state document instead of fetching the live one, which is what
+lets this run in the selftest with no network and no view server up. `--dry-run` prints
+what would be written without touching either file.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "voice"))     # the harbor_voice package lives under voice/
+
+from harbor_voice import config, vocab                                  # noqa: E402
+
+REPO_ROOT = HERE.parent
+NEUTRAL_FILE = REPO_ROOT / "etc" / "dictation-vocabulary.md"
+WORK_FILES = sorted(REPO_ROOT.glob("adapters/*/dictation-vocabulary.md"))
+
+BEGIN = "<!-- harvested:begin, written by bin/keel-voice-vocab, do not hand-edit -->"
+END = "<!-- harvested:end -->"
+
+# THE SAME CAP THE PROMPT ITSELF IS FOR. Whisper.cpp truncates the initial prompt at 224
+# tokens from the FRONT (etc/dictation-vocabulary.md's own note), so a harvested list
+# that grew without bound would silently push the neutral half off the front of the
+# prompt exactly like the 160-character utterance cap once silently dropped his words.
+# Four characters a token is the same rule of thumb index.py uses.
+MAX_TOKENS = 90
+
+
+def _cap(terms: list[str], max_tokens: int) -> tuple[list[str], int]:
+    """As many terms as fit, and how many were left out."""
+    out: list[str] = []
+    budget = max_tokens * 4                                            # back to characters
+    spent = 0
+    for i, t in enumerate(terms):
+        cost = len(t) + (2 if i else 0)                                 # ", "
+        if spent + cost > budget:
+            return out, len(terms) - len(out)
+        out.append(t)
+        spent += cost
+    return out, 0
+
+
+def fetch_state(offline: str | None) -> dict:
+    """The live board document, or a saved one. Built through `kb` now rather than
+    fetched from a dashboard, which is the only thing about this command the cutover
+    changed: `harvest()` reads the same keys either way."""
+    if offline:
+        return json.loads(Path(offline).read_text())
+    from harbor_voice import snapshot                                   # noqa: PLC0415
+    return snapshot.board_doc()
+
+
+def _replace_block(text: str, block: str) -> tuple[str, bool]:
+    """The text with the harvested block swapped in, or unchanged if the markers are
+    missing (a file that has drifted away from this format is not silently rewritten)."""
+    pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
+    if not pattern.search(text):
+        return text, False
+    # A LAMBDA, NOT A BARE STRING. `re.sub` treats a string replacement as a template
+    # and interprets `\1`, `\g<name>` and a trailing lone backslash specially; a
+    # harvested term is arbitrary text off the live document, and a name that ever
+    # contained a backslash would corrupt the write (or raise) instead of being
+    # written verbatim. Raised by review.
+    return pattern.sub(lambda m: block.strip("\n"), text), True
+
+
+def _terms_block(title: str, terms: list[str], max_tokens: int, note: str = "") -> str:
+    kept, cut = _cap(terms, max_tokens)
+    lines = [BEGIN, "", f"**{title}** ({len(kept)} terms harvested"
+             + (f", {cut} more cut to stay inside the token budget" if cut else "")
+             + "):", "", "```", ", ".join(kept), "```"]
+    if note:
+        lines += ["", note]
+    lines += ["", END]
+    return "\n".join(lines)
+
+
+def cmd_generate(a) -> int:
+    doc = fetch_state(a.offline)
+    harvested = vocab.harvest(doc)
+
+    # DEDUPED, ORDER PRESERVED. The categories are allowed to overlap (a segment can
+    # share a name with a running dispatch), and a term repeated in the prompt spends
+    # the token budget twice for the same word.
+    seen: dict[str, None] = {}
+    for term in (harvested["harbor"] + harvested["segments"] + harvested["names"]):
+        seen.setdefault(term, None)
+    neutral_terms = list(seen)
+    neutral_block = _terms_block("Harvested", neutral_terms, MAX_TOKENS,
+                                 note=harvested.get("card_id_note", ""))
+
+    neutral_src = NEUTRAL_FILE.read_text()
+    neutral_out, matched_n = _replace_block(neutral_src, neutral_block)
+    if not matched_n:
+        print(f"no {BEGIN!r} markers in {NEUTRAL_FILE}, leaving it alone", file=sys.stderr)
+        return 1
+
+    if a.dry_run:
+        print(neutral_block)
+        print(f"\n({len(neutral_terms)} candidate terms harvested for the neutral file)")
+        return 0
+
+    NEUTRAL_FILE.write_text(neutral_out)
+    print(f"wrote {NEUTRAL_FILE}")
+
+    # WHICHEVER EMPLOYER ADAPTER IS INSTALLED, IF ANY. Found by glob, never by name
+    # (see the module docstring): no match is the ordinary state between jobs, not
+    # an error.
+    for work_file in WORK_FILES:
+        work_block = _terms_block(
+            "Harvested from live state (names only; the hand-picked jargon above is "
+            "domain knowledge, not something any store holds, and is kept as written)",
+            harvested["names"], MAX_TOKENS)
+        work_src = work_file.read_text()
+        work_out, matched_w = _replace_block(work_src, work_block)
+        if matched_w:
+            work_file.write_text(work_out)
+            print(f"wrote {work_file}")
+        else:
+            print(f"no {BEGIN!r} markers in {work_file} yet; run once by hand to add them",
+                  file=sys.stderr)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="keel-voice-vocab")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    g = sub.add_parser("generate", help="harvest the live state and rewrite both files")
+    g.add_argument("--offline", default=None,
+                   help="read a saved state document instead of the live one")
+    g.add_argument("--dry-run", action="store_true",
+                   help="print what would be written, touch nothing")
+    g.set_defaults(func=cmd_generate)
+    return p
+
+
+def main(argv=None) -> int:
+    a = build_parser().parse_args(argv)
+    return a.func(a)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

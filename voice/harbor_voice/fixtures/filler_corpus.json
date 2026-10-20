@@ -1,0 +1,1777 @@
+[
+ {
+  "text": "right, let me go and see what's there.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and have a look around.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and see what's going on.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "just let me check what's out there.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, I'll have a look at that for you.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and see how things stand.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "give me a moment to go and look.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll pop over and see what's about.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me cast an eye over that.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go and take a look.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and see what turns up.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, I'll go and check that.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me have a proper look.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and see what's waiting.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and poke around a little.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "give me a moment, I'll go and see.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go and check things over.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and see what's open just now.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and see what's running.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, let me go and look at that.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, I'll go and take a proper look.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and see what's about.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and have a scout around.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "give me a moment to go and check.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me see what's on offer there.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and see what's sitting there.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and check what's what.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, let me go and see.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, I'll go and see how things look.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and have a nose around.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and check what's around.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "give me a moment, let me go and look.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go and see what's up.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and see what's kicking about.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and check what's waiting there.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, I'll have a look for you.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go and see what's happening.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "I'll go and have a look through that.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and see what's around here.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "give me a moment, I'll go and check.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "right, I'll go and see what's there for you.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "let me go and check that out properly.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, let me go and see what's about.",
+  "topic": "lookup",
+  "stage": "open"
+ },
+ {
+  "text": "still looking.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking on that.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still having a look.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, still on it.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still on the look out.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking things over.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still looking.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, still checking.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still looking it over.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking that out.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "right, let me weigh that up.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me think that through properly.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll weigh up the options there.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me mull that over.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me turn that over in my head.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll think that through for you.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me weigh things up.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me think it through.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me weigh up the pros and cons.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll mull that over properly.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me turn that over.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me sit with that a moment.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll weigh that up for you.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me chew on that.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll think that over carefully.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me weigh up the sides.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll turn that over in my mind.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me see how that weighs up.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll chew that over for you.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me think that through carefully.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll weigh it up properly.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me mull it over.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me weigh up which way to go.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll think that through carefully now.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me turn it over in my mind.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me chew on that a moment.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll size up the options there.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me think that over.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me mull over the options.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me weigh up what's best.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me think it through properly.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me weigh the options up.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me think that over for you.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "let me turn that question over.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "I'll weigh up what makes sense.",
+  "topic": "judgement",
+  "stage": "open"
+ },
+ {
+  "text": "still thinking it through.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, still weighing it up.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still weighing it up.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still thinking that through.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, still mulling it over.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still on the thinking.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "right, let me get that straight.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me work that through properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me put that in order.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me work through that for you.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me work that out.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me get things straight before we go on.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "I'll piece that together for you.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me work through the detail.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that clear before anything else.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "I'll set that out properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get that in order.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me work that out properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me piece that together.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me set that out for you.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "I'll work through that properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get things clear.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me get a proper picture of that in my head.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "I'll work that through for you.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that straightened out.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me work through it properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me get my head round that.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get that clear.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me piece that together properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me work that through.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me set that straight before we go further.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me untangle that for you.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me work through the detail there.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get my thoughts in order.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that clear in my head.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "I'll work that out for you.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me set that out properly.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get that pieced together.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "let me work that through carefully.",
+  "topic": "explain",
+  "stage": "open"
+ },
+ {
+  "text": "bear with me, still working it out.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still working that out.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, still piecing it together.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "right, let me see what I can do there.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right you are, let me get moving.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get stuck into that.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get things moving.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me crack on with that.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right then, on it.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me push ahead with that.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get going on that now.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right, I'm on that.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me set things in motion.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that ball rolling for you.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get to it.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get down to business.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that rolling.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "fair enough, let me get this underway.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right then, let me get to work.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me get that off the ground.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me take that on now.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me push that along for you.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that into motion.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get stuck in.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get that underway right away.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "let me get things moving on my end.",
+  "topic": "action",
+  "stage": "open"
+ },
+ {
+  "text": "still on it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "let me cast my mind back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me think back on that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go back over that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a dig through for that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go rummaging through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me trace that back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a think back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me go back and look.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me look back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me sift back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me go digging for that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go back through things.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a rummage back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me think back a moment.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go back and check.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me cast back over that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me go back over the ground.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me trawl back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go back and see.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go back a fair way.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me have a look back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go back over old ground.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me search back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me dig back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go back and take a proper look.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me think that back through.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me go back and dig around.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a good think back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me look back over things.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me trace back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me look a good way back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go back and think.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go rifling back through that.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "okay, let me go back over what happened.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a look further back.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me go back and trace it.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "let me go back and take a look now.",
+  "topic": "recall",
+  "stage": "open"
+ },
+ {
+  "text": "still looking back for that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "bear with me.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "just a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a look at that.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, give me a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me see.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "hang on a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a think.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, bear with me.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "just bear with me a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me see what's what.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "give me just a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me have a look.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me take a moment with that.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "hold on a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me see about that.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, hang on.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a proper look.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me see.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me mull that over.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "just give me a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me turn that over.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, hold on a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "give me a beat.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a ponder.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me have a think.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me chew that over.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, let me see.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a proper think.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, just a moment please.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me weigh that up.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "give me a tick.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, hang on a moment.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a look into it.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me turn my mind to that.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, let me have a look.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "give me a moment with that.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "let me have a look at what's what.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "hang on, bear with me.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "right, let me get my head round that.",
+  "topic": "general",
+  "stage": "open"
+ },
+ {
+  "text": "still with you.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "still thinking.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me still.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "still chewing on it.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still here.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "just bear with me.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "let me check on that for you.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still looking into it.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, let me see what's there.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment to check.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm on it, checking now.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "let me have another look.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, let me look that up.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still working on finding that.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "let me see what I can find.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "checking on that now.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a sec to look.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still looking that up for you.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "let me find out for you.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, checking that now.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm still checking on that.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "let me take a proper look.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still looking through that.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, I'm checking now.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment, still looking.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "let me see what's there.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking, hang on.",
+  "topic": "lookup",
+  "stage": "hold"
+ },
+ {
+  "text": "let me think that through.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still weighing that up, bear with me.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment to think it through.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm still thinking about that.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, let me weigh that up.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "let me work that out.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still working it out, hang on.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, I'm thinking it through.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, still working that out.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still turning that over, give me a moment.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm thinking that through now.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "let me weigh it up properly.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, still thinking about it.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a sec to think that through.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still mulling that over, hang on.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still working through that, bear with me.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "I'll think that through properly.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still weighing it up, give me a sec.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, let me think that over.",
+  "topic": "judgement",
+  "stage": "hold"
+ },
+ {
+  "text": "still thinking about how that fits together.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment to explain that properly.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, let me think that through.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm still checking that through.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "let me see how that fits together.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking how that works.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, working that out.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "let me think about why that happens.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still working through that.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a sec to think it through.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "still looking into how that works.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "let me find out why that happens.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, still checking that through.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "still puzzling that through, bear with me.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "let me see what's behind that.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, let me look into that.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "still working it out, give me a moment.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, I'm still working that out.",
+  "topic": "explain",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm on it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "on it, give me a moment.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "let me get on with that.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "still working on that now.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, I'm on it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment, I'm on it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, working on it now.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm on that now.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "still working on it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "let me look at that.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, I'm on it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a sec, on it now.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "let me get that going.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, let me get on with it.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "still on it, hang on.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "let me get moving on that.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "still getting that underway, hang on.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm working on that now.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment to get going.",
+  "topic": "action",
+  "stage": "hold"
+ },
+ {
+  "text": "let me look back at that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking back on that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment to look back.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still looking back through that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm still thinking back on that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, let me think back.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me, checking back on that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "let me take another look back.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still thinking back on that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a sec to check back.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, still looking into that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "I'll check back on that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still working that out, bear with me.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "let me check what's there.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking that from before, hang on.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, thinking back on that.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still on it, checking back now.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment, looking back now.",
+  "topic": "recall",
+  "stage": "hold"
+ },
+ {
+  "text": "still with you, give me a moment.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "let me have a look.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still thinking.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "I'm still on it.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a sec.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "still working on that.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "let me check that for you.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, let me see.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "bear with me a moment.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "let me think about that.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "I hear you, still on it.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "understood, give me a moment.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "got it, let me look into that.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "still checking, bear with me.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "let me see what's going on.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "hold on, still with you.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "I'll take a look.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "give me a moment, still thinking.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "still thinking that through, hang on.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "let me process that for a moment.",
+  "topic": "general",
+  "stage": "hold"
+ },
+ {
+  "text": "hang on, still checking on that.",
+  "topic": "general",
+  "stage": "hold"
+ }
+]

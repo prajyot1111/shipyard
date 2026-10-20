@@ -1,0 +1,141 @@
+/* The Bosun page (c-519, c-591): `/console` and its three other sections. The palette is
+ * `html[data-mode="console"]` in `app/ui.css` (graphite and iris); this file is only the page's layout, in the deck's budgets: four
+ * type sizes (15, 13, 11, 10), two weights, a 4px grid, square boxes, soft pills. */
+
+/* The deck's shell (c-591): the rail, the header, the body that scrolls and the bottom bar
+   are `ui.css`'s own; this file only lays out what is inside the sections. */
+.header .bmark{width:20px;height:20px}
+.header h1{flex:0 1 auto}
+.cback{display:inline-flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink);text-decoration:none}
+.cback:hover{text-decoration:none}
+.rail-brand .bmark{width:20px;height:20px}
+.rail-item.cdeck{margin:8px 8px 0;width:auto;color:var(--ink-2);font-size:13px;text-decoration:none}
+.rail-item.cdeck:hover{text-decoration:none}
+.dock-badge.grey{background:var(--s3);color:var(--ink-2)}
+
+/* ---------- the session: status, meter, the taps, the attach command ---------- */
+.cstatus{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:var(--pill);min-width:0;
+  background:var(--s1);border:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap}
+.cstatus>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.cstatus .dot.b-idle,.cstatus .dot.b-working{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 18%,transparent)}
+.cstatus .dot.b-working{animation:breathe 1.4s ease-in-out infinite}
+.cstatus .dot.b-stopped,.cstatus .dot.b-never{background:var(--ink-3)}
+.cstatus .dot.b-away,.cstatus .dot.b-stuck{background:var(--warn)}
+.cstatus .dot.b-voice{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.csession .panel-body{gap:16px}
+.csession-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.cfact{white-space:normal}
+.cmeter{display:flex;align-items:center;gap:12px;margin-top:12px;min-width:0}
+.cmeter-track{position:relative;flex:1;height:8px;background:var(--s3);border-radius:8px}
+.cmeter-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:8px}
+.cmeter-fill.over{background:var(--warn)}
+.cmeter-mark{position:absolute;top:-8px;bottom:-8px;width:1px;background:var(--ink-2)}
+.cmeter-label{position:absolute;bottom:100%;left:0;transform:translateX(-50%);margin-bottom:4px;
+  font-family:var(--mono);font-size:10px;color:var(--warn);white-space:nowrap}
+.cmeter-pct{font-family:var(--mono);font-size:13px;color:var(--ink);min-width:36px;text-align:right}
+.ctaps{display:flex;gap:8px;flex-wrap:wrap}
+.copen{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:32px;padding:0 16px;flex:1 1 100%}
+.copen:hover{text-decoration:none}
+.cbtn{height:32px;padding:0 16px;background:transparent;border-color:var(--hair-hi);flex:1}
+.cbtn.stop{color:var(--crit);border-color:var(--crit)}
+.cbtn.stop:disabled{color:var(--ink-3);border-color:var(--hair-hi)}
+.cattach .fix{background:var(--s2);border:1px solid var(--hair);padding:8px}
+
+/* ---------- the sections ---------- */
+.cbody{display:flex;flex-direction:column;gap:12px;min-width:0}
+.cgrid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.cmain{display:flex;flex-direction:column;gap:12px;min-width:0}
+.cside{display:flex;flex-direction:column;gap:16px;min-width:0}
+.clead{display:flex;flex-direction:column;gap:4px;margin:0 0 4px}
+.cempty{border:1px dashed var(--hair-hi);padding:16px;color:var(--ink-2);font-size:13px}
+/* a card of Bosun's as one row: it opens in the deck's Inspector */
+.crow{display:flex;flex-direction:column;gap:4px;padding:8px 12px;background:var(--s2);border:1px solid var(--hair);
+  color:var(--ink);text-decoration:none;min-width:0}
+a.crow:hover{border-color:var(--hair-hi);text-decoration:none}
+.crow.need{border-color:var(--crit)}
+.crow-head{display:flex;align-items:center;gap:8px;min-width:0}
+.crow-title{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow-line{overflow-wrap:anywhere}
+.cpill{height:20px;padding:0 8px;font-family:var(--mono);font-size:10px;color:var(--ink-2);flex:0 0 auto}
+.cpill.need{color:var(--crit);border-color:var(--crit)}
+.cbatch{display:flex;flex-direction:column;gap:8px}
+.cbatch+.cbatch{border-top:1px solid var(--hair);padding-top:12px}
+.cship-open{border-color:var(--accent)}
+.cship-go{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px}
+.cdeploy{height:32px;padding:0 24px}
+.cship-last{display:flex;flex-direction:column;gap:8px}
+.cship-text{overflow-wrap:anywhere}
+.cship-steps{display:flex;flex-direction:column;gap:4px}
+.cship-step{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:baseline}
+.cresult{font-family:var(--mono);font-size:11px}
+.cresult.good{color:var(--good);border-color:var(--good)}
+.cresult.warn{color:var(--warn);border-color:var(--warn)}
+.cresult.crit{color:var(--crit);border-color:var(--crit)}
+.cjournal{display:flex;align-items:center;gap:12px;min-height:32px;border-bottom:1px solid var(--hair);font-size:13px}
+.cjournal:last-child{border-bottom:0}
+.cjournal .cjwhat{flex:1;min-width:0}
+.cjournal .cjat{white-space:nowrap}
+/* the Journal's head (c-524): done by space, then the gaps */
+.cthrough{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.cgaprow{display:flex;align-items:center;gap:12px;min-height:32px;border-bottom:1px solid var(--hair);flex-wrap:wrap}
+.cgaprow:last-child{border-bottom:0}
+.cgaphow{flex:1;min-width:0}
+.pill.warn{color:var(--warn);border-color:var(--warn)}
+
+/* ---------- a request: its state, where from, its line, Copy for chat ---------- */
+.creq{display:flex;flex-direction:column;gap:8px;padding:12px 16px;background:var(--s1);border:1px solid var(--hair)}
+.creq.taken{border-color:var(--accent)}
+.creq-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.creq-head .spacer{flex:1}
+.creq-what{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.creq-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}
+.creq-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ccopy{height:32px;padding:0 16px}
+.cstate{font-family:var(--mono);font-size:11px}
+.cstate.on,.cgap{color:var(--accent-ink);border-color:var(--accent)}
+
+/* ---------- the phone: one column, 44px taps ---------- */
+@media(max-width:899px){
+  .header .iconbtn.cback{width:44px;height:44px}
+  .header .hint{flex:0 99 auto}
+  .cgrid{grid-template-columns:minmax(0,1fr)}
+  .cside{order:-1}
+  .copen{height:48px;font-size:15px}
+  .cbtn,.ccopy,.cdeploy{min-height:44px}
+  .cdeploy{flex:1 1 100%}
+  a.crow{min-height:44px;justify-content:center}
+  .cjournal{flex-wrap:wrap;gap:4px 12px;padding:8px 0}
+  .cjournal .cjwhat{flex:1 1 100%;order:1}
+  .cjournal .cgap,.cjournal .cgap~span{order:2}
+  .cthrough{gap:8px}
+  .cthrough .stat{padding:8px}
+  .cgaprow{gap:4px 8px;padding:8px 0}
+  .cgaphow{flex:1 1 100%;order:1}
+}
+
+/* ---------- an ask: its kind, question, why, the options as buttons (c-521) ---------- */
+.cask{display:flex;flex-direction:column;gap:8px;padding:12px 16px;background:var(--s1);border:1px solid var(--hair);min-width:0;overflow-wrap:anywhere}
+.cask.open{border-color:var(--crit)}
+.ckind{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.cclosed{font-family:var(--mono);font-size:11px}
+.cclosed.good{color:var(--good);border-color:var(--good)}
+.copts{display:flex;flex-direction:column;gap:8px}
+.copt{display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:8px 12px;min-height:44px;text-align:left;
+  background:var(--s2);border:1px solid var(--hair-hi);color:var(--ink);font:inherit;cursor:pointer}
+.copt:hover{border-color:var(--accent)}
+.copt:disabled{opacity:.6;cursor:default}
+.copt.done{cursor:default;background:transparent;border-color:var(--hair)}
+.copt.done:hover{border-color:var(--hair)}
+.copt.chosen{border-color:var(--good)}
+.copt-head{display:flex;align-items:center;gap:8px}
+.copt-label{font-size:13px;font-weight:600}
+.copt-does{overflow-wrap:anywhere}
+.crec{font-size:10px;color:var(--accent-ink);border-color:var(--accent)}
+.cchosen{color:var(--good);margin-left:auto}
+.cother summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
+.cwords{width:100%;box-sizing:border-box;margin:8px 0;background:var(--s2);color:var(--ink);border:1px solid var(--hair-hi);
+  font:inherit;font-size:13px;padding:8px}
+.cfolded{margin-top:8px}
+.cfolded summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
+.cfold{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--hair)}
+.cfold-q{flex:1;min-width:0;overflow-wrap:anywhere}

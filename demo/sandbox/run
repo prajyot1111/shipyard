@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Run one command against the demo sandbox, and only the sandbox.
+
+    demo/sandbox/run kb needs-you
+    demo/sandbox/run keel serve
+    demo/sandbox/run python3 -m demo.seed morning
+
+It names the sandbox's toml (`KEEL_CONFIG`), keeps `KEEL_HOME` at this checkout, and drops
+every variable that could point a process at another board or act as someone
+(`KEEL_LIVE_STATE`, `KEEL_CARD`, `KEEL_TOKEN`, `KEEL_BOSUN`, and the retired `KEEL_URL`). Before it runs anything it loads
+the toml through Keel's own loader and refuses unless the board it opens is inside the
+sandbox. `kb` and `keel` are this checkout's `bin/`.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+KEEL_HOME = HERE.parent.parent
+ID_FLOOR = 9000        # packs/sandbox/sb_card.py ID_FLOOR: every sandbox card is past it
+DROPPED = ("KEEL_URL", "KEEL_LIVE_STATE", "KEEL_CARD", "KEEL_TOKEN", "KEEL_BOSUN")
+
+
+def sandbox_home() -> Path:
+    return Path(os.environ.get("KEEL_SANDBOX") or "~/keel-sandbox").expanduser().absolute()
+
+
+def environment(home: Path) -> dict:
+    env = {key: value for key, value in os.environ.items() if key not in DROPPED}
+    env.update(KEEL_CONFIG=str(home / "keel.toml"), KEEL_HOME=str(KEEL_HOME), KEEL_SANDBOX=str(home),
+               PATH=f"{KEEL_HOME / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
+               PYTHONPATH=str(KEEL_HOME))
+    return env
+
+
+def check(home: Path, env: dict) -> None:
+    """The toml, loaded as the command will load it, opens a board inside the sandbox."""
+    if not (home / ".keel-sandbox").is_file():
+        raise SystemExit(f"run: {home} is not a sandbox; build it with demo/sandbox/setup")
+    os.environ.clear()
+    os.environ.update(env)
+    sys.path.insert(0, str(KEEL_HOME))
+    from keel import config  # noqa: PLC0415 - loaded with the sandbox's environment
+    cfg = config.load(ensure=False)
+    if not Path(cfg.db_path).resolve().is_relative_to(home.resolve()):
+        raise SystemExit(f"run: the toml opens {cfg.db_path}, which is not the sandbox's; refusing")
+    low = low_ids(Path(cfg.db_path))
+    if low:
+        raise SystemExit(f"run: the sandbox board holds {low[0]}, below c-{ID_FLOOR}: a house of that name "
+                         f"could be taken for a live card's; rebuild it with demo/sandbox/setup")
+
+
+def low_ids(db: Path) -> list[str]:
+    """Card ids below the floor, read-only; none on a board not made yet."""
+    if not db.exists():
+        return []
+    import sqlite3  # noqa: PLC0415
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        ids = [row[0] for row in conn.execute("SELECT id FROM cards")]
+    except sqlite3.OperationalError:
+        ids = []          # a board file with no cards table yet
+    finally:
+        conn.close()
+    return [i for i in ids if i.startswith("c-") and i[2:].isdigit() and int(i[2:]) < ID_FLOOR]
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        print(__doc__, file=sys.stderr)
+        return 2
+    home = sandbox_home()
+    env = environment(home)
+    check(home, env)
+    command = argv[0]
+    if command in ("kb", "keel", "keel-browser"):
+        command = str(KEEL_HOME / "bin" / command)
+    os.execvpe(command, [command, *argv[1:]], env)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

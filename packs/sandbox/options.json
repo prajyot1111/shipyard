@@ -1,0 +1,8 @@
+[
+  {"key": "repo", "label": "Repo", "type": "multiselect", "stored": "card", "options": ["api", "web"], "default": ["api"], "help": "one or more of the sandbox's repos; the first is the primary worktree"},
+  {"key": "autonomy", "label": "Autonomy", "type": "select", "stored": "card", "options": ["attended", "autonomous"], "default": "attended"},
+  {"key": "kind", "label": "Kind", "type": "select", "stored": "options", "options": ["bug", "feature", "chore", "research"], "default": "feature", "help": "names the branch type; research opens no merge request"},
+  {"key": "model", "label": "Model", "type": "select", "stored": "card", "options": ["opus", "sonnet", "haiku"], "default": "opus"},
+  {"key": "tracker_mode", "label": "Issue mode", "type": "select", "stored": "options", "options": ["create at task start", "none"], "default": "create at task start"},
+  {"key": "base", "label": "Base branch", "type": "select", "stored": "options", "options": ["main"], "default": "main"}
+]

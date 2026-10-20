@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+"""keel-voice-corpus - the written filler lines: check them, render them, score them.
+
+    keel-voice-corpus check              every line against the corpus screen
+    keel-voice-corpus list [topic]       read the whole set, which is the safety argument
+    keel-voice-corpus render [--force]   one WAV per line (the filler and the capture acks),
+                                         once, so speaking costs nothing
+    keel-voice-corpus score              the embedding picker against the keyword one
+    keel-voice-corpus stats              how much is rendered and what it cost
+
+WHY THERE IS A COMMAND FOR READING THE LINES. The entire safety argument for the corpus
+is that a person can read the whole set: findings 27 showed that every escape the model
+filler produced was found by a person READING the allowed lines, because no counter can
+find one. `list` is that, made cheap.
+
+RENDER IS AN INSTALL STEP, NOT A BUILD STEP. The clips are generated rather than
+committed: a few hundred lines of speech is about forty megabytes, and a repository is
+not where forty megabytes of generated audio belongs. The cost of generating them is
+trivial and is paid once: 10,779 characters for the 355 lines that ship, against a
+1,000,000 a month free allowance. They live under the segment's own data/, which is the gateway's
+writable surface and is not repository content.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import statistics
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "voice"))     # the harbor_voice package lives under voice/
+
+from harbor_voice import config, corpus, speech                         # noqa: E402
+
+
+def cmd_check(a) -> int:
+    lines = corpus.load()
+    bad = [(ln, corpus.check(ln.text, ln.stage)) for ln in lines]
+    bad = [(ln, why) for ln, why in bad if why]
+    from collections import Counter
+    counts = Counter((ln.topic, ln.stage) for ln in lines)
+    print(f"{len(lines)} written lines")
+    for stage in corpus.STAGES:
+        row = "  ".join(f"{t}:{counts[(t, stage)]}" for t in corpus.TOPICS)
+        print(f"  {stage:5s}  {row}")
+    if bad:
+        print(f"\n{len(bad)} REFUSED by the corpus screen:")
+        for ln, why in bad:
+            print(f"  [{ln.stage}/{ln.topic}] {ln.text!r}\n      {why}")
+        return 1
+    print("\nevery line passes. Nothing here can assert anything, and a person can read "
+          "the whole set: keel-voice-corpus list")
+    return 0
+
+
+def cmd_list(a) -> int:
+    lines = corpus.load()
+    for stage in corpus.STAGES:
+        for topic in corpus.TOPICS:
+            if a.topic and topic != a.topic:
+                continue
+            rows = [ln for ln in lines if ln.stage == stage and ln.topic == topic]
+            if not rows:
+                continue
+            print(f"\n== {stage} / {topic} ({len(rows)}) ==")
+            for ln in rows:
+                print(f"  {ln.text}")
+    return 0
+
+
+# HOW LONG TO WAIT AFTER A REFUSED RENDER CALL, doubling. A render is not a spoken turn:
+# nobody is standing there, so it can afford to wait where a turn cannot. The first
+# attempt at this went through the ordinary chain and made 355 calls back to back;
+# Google refused part way through, the chain degraded to kokoro exactly as it is built
+# to, and 205 clips were written into the cache in the wrong voice.
+RETRY_SECONDS = (2, 5, 15, 45)
+
+# A GAP BETWEEN CALLS, for the same reason. 0.25 s over a few hundred lines costs a
+# minute and a half, once, and it is what stops a render looking like an attack.
+PACE_SECONDS = 0.25
+
+
+def cmd_render(a) -> int:
+    """Speak every line once, IN THE PREFERRED VOICE ONLY, and keep the audio.
+
+    NOT THROUGH THE CHAIN, and that is the correction rather than the design. The chain
+    exists to keep a spoken turn audible when a voice fails, which is exactly right for
+    a turn and exactly wrong for a render: degrading here does not save an answer, it
+    writes a clip in the wrong voice that is then played back forever, because a cache
+    hit asks no questions. Found on 2026-09-04 by reading the character meter, which had
+    counted 150 calls for 355 rendered lines.
+
+    So this drives ONE NAMED ENGINE and nothing else. If it refuses, it waits and asks
+    again; if it keeps refusing, the line is left unrendered and said so. An unrendered
+    line is not a fault: it is synthesised the ordinary way when it is spoken, through
+    the chain, with all its fallbacks intact.
+
+    ONE SET OF CLIPS PER ENGINE HE CAN PICK (V7, card c-312). The cache key names the
+    engine and the voice, and since the control lets him choose an engine per session,
+    `TTSChain.synthesize` reads the cache under THAT engine's key. Rendering only the
+    preferred engine would mean every filler and every capture ack in a Kokoro session
+    missed the cache and was synthesised live, which on the box is about five seconds for
+    three words: the exact wait a filler exists to fill. So `--engine` names which set to
+    render, and with none it renders every set the control offers.
+
+    AND ONE SET PER SPEAKER INSIDE EACH OF THOSE (V8, card c-316). This is the half that
+    was WRONG rather than missing: the voice was worked out with `voice_id_for(want)` and
+    the sentence synthesised with `config.voice_id(want)`, both of which mean "as Harbor".
+    A house line rendered through it would have been spoken in Harbor's voice AND filed
+    under Harbor's key, so playback (which asks under the house's key) would never have
+    found it and the count would have called the cache full while the house was silent.
+    `corpus.audio_sets` enumerates the pairs now, and this walks what it says.
+    """
+    # THE CAPTURE ACKS, THE CONNECTED OPENER AND THE HANDOFF LINES ARE RENDERED WITH THE
+    # FILLER, into the same cache: all of them are fixed sentences played from disk, and one
+    # render step means one thing to remember. WHICH lines belong to which set is
+    # `corpus.lines_for`'s answer and not this script's, so a set added there (V5's opener
+    # was) is rendered here without this file knowing it exists.
+    filler = corpus.load()
+    wanted = _backends_for(getattr(a, "engine", ""))
+    if not wanted:
+        print(f"  REFUSING: no engine named {a.engine!r} in the chain "
+              f"({','.join(config.TTS_CHAIN)})")
+        return 1
+    speaker = str(getattr(a, "speaker", "") or "").strip()
+    if speaker and speaker not in config.SPEAKERS:
+        print(f"  REFUSING: no speaker called {speaker!r} "
+              f"({', '.join(config.SPEAKERS)})")
+        return 1
+    sets = [one for one in corpus.audio_sets(config.TTS_CHAIN, filler)
+            if one["backend"] in wanted
+            and (not speaker or one["speaker"] == speaker)]
+    worst = 0
+    for one in sets:
+        worst = max(worst, _render_one(a, one))
+    return worst
+
+
+def _backends_for(choice: str) -> list[str]:
+    """Which backends to render for. Named: that one, resolved through the chain the way
+    the page's choice is. Unnamed: every engine the control can offer, so one command
+    leaves nothing behind."""
+    if choice:
+        one = config.resolve_engine(choice, config.TTS_CHAIN)
+        return [one] if one else []
+    offered = [e["backend"] for e in config.engines_for_page(config.TTS_CHAIN)]
+    return offered or [(config.TTS_CHAIN or ["browser"])[0].strip()]
+
+
+def _render_one(a, one: dict) -> int:
+    """One (engine, speaker) set, which is what a rendered clip actually belongs to."""
+    cache = corpus.CACHE
+    want, speaker, lines = one["backend"], one["speaker"], one["lines"]
+    voice = one["voice"] or speech.voice_id_for(want, speaker)
+    todo = [ln for ln in lines
+            if a.force or not cache.path_for(ln.text, voice).exists()]
+    print(f"\n{len(lines)} lines as {speaker}, {len(todo)} to render into {cache.dir}")
+    print(f"  they belong to {voice}")
+    if not todo:
+        return 0
+    before = speech.METER.read()
+    chain = speech.TTSChain()
+    # THE NAMED ENGINE, BUILT DIRECTLY, never `chain.name`. The chain answers with
+    # whatever is up, which is the right answer for a spoken turn and the wrong one here.
+    engine = chain._build(want)
+    if engine is None or engine.name != want:
+        print(f"  REFUSING: the voice asked for is {want!r} and it would not start "
+              f"({'; '.join(chain.tried) or 'no reason given'}). Rendering in "
+              "another engine would fill the cache with clips nothing will ever ask "
+              "for, since the key names the voice.")
+        return 1
+    print(f"  voice: {engine.name} ({voice})")
+    started = time.time()
+    made = 0
+    # COUNTED HERE RATHER THAN OFF THE METER, and the first version got that wrong. The
+    # meter is process-wide and counts every call this gateway makes, so anything else
+    # speaking while a render runs lands in the delta: a live test spoke sixteen lines
+    # during the second render and the check below cried degradation over its own noise.
+    # What the check actually wants is "did every clip I wrote come from one call I
+    # made", and that is a local count.
+    calls_here = 0
+    unrendered = []
+    for i, ln in enumerate(todo, 1):
+        pcm = b""
+        why = ""
+        for attempt in range(len(RETRY_SECONDS) + 1):
+            try:
+                pcm = b"".join(engine.synthesize(
+                    ln.text, voice=config.voice_id(want, speaker)))
+                why = ""
+                break
+            except Exception as exc:                                    # noqa: BLE001
+                why = f"{exc.__class__.__name__}" + (
+                    f" {exc.code}" if getattr(exc, "code", None) else "")
+                if attempt >= len(RETRY_SECONDS):
+                    break
+                wait = RETRY_SECONDS[attempt]
+                print(f"  [{i}/{len(todo)}] {why}, waiting {wait}s")
+                time.sleep(wait)
+        if not pcm:
+            unrendered.append((ln.text, why or "no audio came back"))
+            continue
+        cache.write(ln.text, pcm, voice)
+        made += 1
+        calls_here += 1
+        if i % 25 == 0 or i == len(todo):
+            print(f"  [{i}/{len(todo)}] {time.time() - started:.0f}s elapsed")
+        time.sleep(PACE_SECONDS)
+    after = speech.METER.read()
+    stats = cache.stats(lines, voice)
+    print(f"\nrendered {made}, left unrendered {len(unrendered)}, "
+          f"{time.time() - started:.0f}s")
+    for text, why in unrendered[:10]:
+        print(f"  not rendered ({why}): {text!r}")
+    print(f"  {stats['rendered']}/{stats['lines']} lines have audio, "
+          f"{stats['bytes'] / 1e6:.1f} MB in {stats['dir']}")
+    spent = after["characters"] - before["characters"]
+    calls = after["calls"] - before["calls"]
+    print(f"  {calls_here} calls to {engine.name}, {spent} characters against the "
+          f"{config.TTS_FREE_ALLOWANCE:,} a month free allowance, paid once")
+    # ONLY A METERED ENGINE HAS A METER TO DISAGREE WITH. The character meter counts what
+    # goes to the HOSTED voice, so a local render always reads zero against it, and
+    # comparing anyway printed "something else in this process was speaking too" after
+    # every single kokoro render. V8 makes that the common case (a house's set is one line
+    # and renders locally in four seconds), so the check now asks only where it means
+    # something.
+    if getattr(engine, "meter", None) is not None and calls != calls_here:
+        print(f"  (the meter saw {calls} calls in that time: something else in this "
+              "process was speaking too)")
+    # THE CHECK THAT WOULD HAVE CAUGHT THE BUG. Every clip written came from one call to
+    # the preferred engine, or something else spoke and the cache is keyed to a voice it
+    # does not hold.
+    if calls_here != made:
+        print(f"  WARNING: {made} clips written from {calls_here} calls to "
+              f"{engine.name}. Some of them did not come from the voice they are "
+              "keyed to.")
+        return 1
+    return 1 if unrendered else 0
+
+
+def cmd_stats(a) -> int:
+    print(json.dumps(corpus.env_note(), indent=2))
+    print(json.dumps(speech.METER.as_json(), indent=2))
+    return 0
+
+
+# WHAT THE TWO PICKERS ARE SCORED ON. Utterances written to belong to one topic
+# unambiguously, so a disagreement is a real one rather than a borderline call, and
+# HIS OWN 20 UTTERANCES from segments/voice/data/transcript.jsonl are added by
+# `--his` where they exist, because a generated set is a plausible number rather than
+# a real one and that lesson is already paid for twice in this project.
+SCORE_SET = [
+    ("what have you got running", "lookup"),
+    ("anything waiting on me", "lookup"),
+    ("what rooms are open", "lookup"),
+    ("read me the queue", "lookup"),
+    ("what is on the work board", "lookup"),
+    ("how much has today cost", "lookup"),
+    ("is there a review surface open", "lookup"),
+    ("what is that session up to", "lookup"),
+    ("anything from the segments", "lookup"),
+    ("what have I got left to deal with", "lookup"),
+    ("should I merge that or leave it", "judgement"),
+    ("is that worth doing at all", "judgement"),
+    ("what do you make of that", "judgement"),
+    ("which of those two is better", "judgement"),
+    ("do you reckon that is a good idea", "judgement"),
+    ("would you approve that one", "judgement"),
+    ("is it safe to close that now", "judgement"),
+    ("what would you recommend there", "judgement"),
+    ("shall I go ahead with it", "judgement"),
+    ("does that make sense to you", "judgement"),
+    ("how does the voice system work", "explain"),
+    ("why is that one taking so long", "explain"),
+    ("what does that actually mean", "explain"),
+    ("explain the difference between those", "explain"),
+    ("how do the two tiers fit together", "explain"),
+    ("what is a dispatch supposed to be", "explain"),
+    ("tell me about the room thing", "explain"),
+    ("why did it answer like that", "explain"),
+    ("how is that meant to work", "explain"),
+    ("what is the point of the queue", "explain"),
+    ("can you spawn a session for that", "action"),
+    ("close that one down please", "action"),
+    ("start the review off", "action"),
+    ("could you write that up for me", "action"),
+    ("turn the fast tier off", "action"),
+    ("send that over to the other one", "action"),
+    ("go ahead and do it", "action"),
+    ("please add that to the list", "action"),
+    ("stop that one", "action"),
+    ("build me something for that", "action"),
+    ("what did I ask you earlier", "recall"),
+    ("what was that thing from yesterday", "recall"),
+    ("remind me what we said last week", "recall"),
+    ("what did you tell me this morning", "recall"),
+    ("go back to what I said before", "recall"),
+    ("what was the one from last night", "recall"),
+    ("we talked about this the other day", "recall"),
+    ("what did I say about that previously", "recall"),
+    ("remind me where we got to", "recall"),
+    ("what came up back then", "recall"),
+    ("hey how is it going", "general"),
+    ("hello there", "general"),
+    ("just testing this out", "general"),
+    ("nice one", "general"),
+    ("what is the weather like today", "general"),
+    ("say something", "general"),
+    ("I was just thinking out loud", "general"),
+    ("never mind that", "general"),
+    ("carry on then", "general"),
+    ("thanks very much", "general"),
+]
+
+
+def cmd_score(a) -> int:
+    """The embedding picker against the keyword one, on the same set.
+
+    THE QUESTION IS NOT WHICH IS CLEVERER. The whole reason the lookup tier was switched
+    off was to stop holding a model resident, so a picker that needs one has to earn it. If a
+    keyword mapping over six topics is indistinguishable to the ear, the simpler thing
+    wins on its own merits rather than on resource cost.
+    """
+    lines = corpus.load()
+    rows = list(SCORE_SET)
+    if a.his:
+        seen = set()
+        path = config.DATA / "transcript.jsonl"
+        for raw in (path.read_text().splitlines() if path.exists() else []):
+            try:
+                rec = json.loads(raw)
+            except Exception:                                           # noqa: BLE001
+                continue
+            if rec.get("kind") == "said" and rec.get("said") not in seen:
+                seen.add(rec["said"])
+        print(f"({len(seen)} of his own utterances read, unlabelled, printed below)\n")
+
+    pickers = []
+    for name in ("keyword", "embed"):
+        try:
+            pickers.append(corpus.picker_from_config(name, lines))
+        except Exception as exc:                                        # noqa: BLE001
+            print(f"{name}: not available ({exc.__class__.__name__})")
+    results = {}
+    for picker in pickers:
+        started = time.time()
+        got = [picker.topic(said) for said, _want in rows]
+        seconds = (time.time() - started) / max(1, len(rows))
+        right = sum(1 for (said, want), g in zip(rows, got) if g == want)
+        results[picker.name] = {"right": right, "of": len(rows), "seconds": seconds,
+                                "got": got}
+        print(f"{picker.name:8s} {right}/{len(rows)} "
+              f"({100.0 * right / len(rows):.0f}%)  {seconds * 1000:.1f} ms a call")
+
+    if len(results) == 2:
+        k, e = results["keyword"], results["embed"]
+        print()
+        disagree = [(said, want, kg, eg)
+                    for (said, want), kg, eg in zip(rows, k["got"], e["got"])
+                    if kg != eg]
+        print(f"they disagree on {len(disagree)} of {len(rows)}:")
+        for said, want, kg, eg in disagree:
+            mark = "embed" if eg == want else ("keyword" if kg == want else "neither")
+            print(f"  {said!r}\n      wanted {want}, keyword said {kg}, embed said {eg} "
+                  f"-> {mark} is right")
+        # WHAT IT SOUNDS LIKE, which is the question that actually matters. A wrong topic
+        # is not a wrong answer, it is a filler that is slightly less apt, so the two are
+        # printed side by side and the difference is judged by reading rather than by a
+        # percentage.
+        print("\nwhat he would actually hear, where they differ:")
+        for said, _want, _kg, _eg in disagree[:12]:
+            a_line = results and pickers[0].pick(said, "open").text
+            b_line = pickers[1].pick(said, "open").text if len(pickers) > 1 else ""
+            print(f"  {said!r}\n      keyword: {a_line}\n      embed:   {b_line}")
+
+    if a.his:
+        path = config.DATA / "transcript.jsonl"
+        said_lines, seen = [], set()
+        for raw in (path.read_text().splitlines() if path.exists() else []):
+            try:
+                rec = json.loads(raw)
+            except Exception:                                           # noqa: BLE001
+                continue
+            if rec.get("kind") == "said" and rec.get("said") not in seen:
+                seen.add(rec["said"])
+                said_lines.append(rec["said"])
+        print("\n== his own utterances, both pickers, unlabelled ==")
+        for said in said_lines:
+            row = "  ".join(f"{p.name}={p.topic(said)}" for p in pickers)
+            print(f"  {said[:90]!r}\n      {row}")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="keel-voice-corpus", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd")
+    sub.add_parser("check")
+    p_list = sub.add_parser("list")
+    p_list.add_argument("topic", nargs="?", choices=corpus.TOPICS)
+    p_render = sub.add_parser("render")
+    p_render.add_argument("--force", action="store_true",
+                          help="re-render lines that already have audio")
+    p_render.add_argument("--engine", default="",
+                          help="render one engine's set (google, kokoro); "
+                               "with none, every engine the voice control offers")
+    # WHY THIS IS A FLAG AND NOT A LOOP NOBODY CAN STOP: V8 gave a house its own voice, so
+    # changing that one setting invalidated one line in each engine's set and nothing else,
+    # and rendering it again should not have meant speaking 364 of Harbor's lines to get
+    # there. V13 took the second voice away and a house's set is EMPTY now, so this flag
+    # narrows to nothing; it is kept because the enumeration it narrows is still per
+    # speaker, and a flag that selects an empty set is honest about that.
+    p_render.add_argument("--speaker", default="",
+                          help="render one speaker's set (harbor, house); "
+                               "with none, both")
+    sub.add_parser("stats")
+    p_score = sub.add_parser("score")
+    p_score.add_argument("--his", action="store_true",
+                         help="also print both pickers' answers for his own utterances")
+    a = ap.parse_args()
+    if a.cmd == "check":
+        return cmd_check(a)
+    if a.cmd == "list":
+        return cmd_list(a)
+    if a.cmd == "render":
+        return cmd_render(a)
+    if a.cmd == "stats":
+        return cmd_stats(a)
+    if a.cmd == "score":
+        return cmd_score(a)
+    ap.print_help()
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""Build the Shipyard demo video from nothing: sandbox, seed, record, edit.
+
+    demo/build --out <dir> [--home <dir>] [--port <n>] [--voice <dir>] [--cut <name>]
+    demo/build --out <dir> --edit-only          re-render from the takes already kept
+    demo/build --out <dir> --dry-run            say what would run, run nothing
+    demo/build --out <dir> --edit-only --cut short-01    a short from the same day's takes
+
+1. SETUP. `demo/sandbox/setup` builds the sandbox (default `~/keel-sandbox`, or `--home`),
+   unless one is already there.
+2. RECORD. Only on a sandbox with no kept take yet: this is a day played once, in order.
+   The deck, the drain and the sandbox's Harbor run under `demo/sandbox/run` for the
+   duration, each stopped by the pid it was started with. The user's four lines are made
+   mic-ready, then the day runs: the morning seed and scenes 1 to 3; scene 4 files the
+   export card on the deck and its house starts; scene 5 waits for its plan; scene 6 while
+   it builds; scenes 7 and 8 once it reaches its outcome gate; the breaks seed and scene 9;
+   the evening seed and scenes 10 and 11. A voice scene's answers are captured and swept
+   before its take can be kept. A scene that is not live gets up to three takes. A sandbox
+   with some takes kept and others not is refused: finish it by hand with
+   `demo/scenes/record`, or build a fresh one with `--home`.
+3. EDIT. `demo/video/prepare.mjs` resolves the cut against the kept takes and cleans the
+   audio, and `demo/video/render.mjs` renders scene by scene and writes
+   `<out>/shipyard-demo.mp4` and `.srt`. Then the evidence: the MP4's duration, resolution
+   and loudness, one frame per scene, and the bed against the voices (`demo/video/evidence.mjs`).
+
+--cut picks what the edit makes: `film` (the default, the 5:40 film) or a short cut of the
+LinkedIn series (`demo/video/src/shorts.js`), a 1080x1350 portrait video under a minute cut
+from the same day's takes, written as `<out>/shipyard-<cut>.mp4` and `.srt`. The day is the
+same for every cut, so a short needs no recording of its own. A cut names the user's lines
+it plays by file name in --voice: `short-01` reuses the film's line-1.wav ("Harbor,
+anything pending on my side?") and line-4.wav ("Hey Harbor, anything left for today?"),
+so it needs no new recording; a later short can name new files (say short-1.wav) instead.
+
+The public release leaves `demo/video/` and `demo/music/` out (`.gitattributes`), so there
+this script refuses at once, before a sandbox is made; `--dry-run` still says what would run.
+
+Everything the sandbox does runs through `demo/sandbox/run`, which refuses any board that is
+not the sandbox's; this script never names another toml.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+KEEL_HOME = HERE.parent
+RUN = HERE / "sandbox" / "run"
+VIDEO = HERE / "video"
+EXPORT_TITLE = "Add CSV export to the reports page"
+LIVE = {"04", "05", "07", "08"}
+TAKES = 3
+WAIT = 45 * 60
+# The cuts the edit knows (demo/video/src/cut.js and shorts.js), checked before a sandbox is
+# made, so a mistyped name never waits out a whole day's recording to be refused.
+CUTS = ("film", "short-01")
+
+# The day, in the order it happens: a seed phase, a scene, or a wait on the export card.
+DAY = [("seed", "morning"), ("scene", "01"), ("scene", "02"), ("scene", "03"),
+       ("scene", "04"), ("card", None), ("wait", "planning"), ("scene", "05"),
+       ("scene", "06"), ("wait", "review"), ("scene", "07"), ("scene", "08"),
+       ("wait", "shipping"), ("seed", "breaks"), ("scene", "09"),
+       ("seed", "evening"), ("scene", "10"), ("scene", "11")]
+VOICE_SCENES = {"02", "06", "07", "10"}
+LINES = ("line-1.wav", "line-2.wav", "line-3.wav", "line-4.wav")
+
+
+class BuildError(Exception):
+    pass
+
+
+class Build:
+    def __init__(self, args):
+        self.home = Path(args.home).expanduser().absolute()
+        self.port = args.port
+        self.voice = Path(args.voice).expanduser().absolute() if args.voice else None
+        self.out = Path(args.out).expanduser().absolute()
+        self.dry = args.dry_run
+        self.cut = args.cut
+        self.env = {**os.environ, "KEEL_SANDBOX": str(self.home)}
+        self.env.pop("KEEL_CONFIG", None)
+        self.started = []
+        self.card = None
+
+    # ---- running things ----
+
+    def run(self, argv, *, sandbox=False, check=True, cwd=None, capture=False):
+        cmd = [str(RUN), *argv] if sandbox else [str(a) for a in argv]
+        print("build:", " ".join(str(c) for c in cmd), flush=True)
+        if self.dry:
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        done = subprocess.run(cmd, env=self.env, cwd=cwd, text=True, capture_output=capture)
+        if check and done.returncode != 0:
+            raise BuildError(f"{' '.join(str(c) for c in cmd[:4])} exited {done.returncode}"
+                             + (f": {done.stderr.strip()[-400:]}" if capture else ""))
+        return done
+
+    def start(self, name, argv):
+        log = self.home / "run" / f"{name}.log"
+        print(f"build: start {name}: {' '.join(argv)}", flush=True)
+        if self.dry:
+            return
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("w") as fh:
+            proc = subprocess.Popen([str(RUN), *argv], env=self.env, stdout=fh, stderr=subprocess.STDOUT)
+        (self.home / "run" / f"{name}.pid").write_text(str(proc.pid))
+        self.started.append((name, proc))
+
+    def stop_all(self):
+        for name, proc in reversed(self.started):
+            if proc.poll() is None:
+                print(f"build: stop {name} (pid {proc.pid})", flush=True)
+                proc.terminate()
+                try:
+                    proc.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+        self.started = []
+
+    # ---- 1. setup ----
+
+    def setup(self):
+        if (self.home / ".keel-sandbox").is_file():
+            print(f"build: the sandbox at {self.home} is there; setup skipped", flush=True)
+            return
+        self.run([HERE / "sandbox" / "setup", "--home", self.home, "--port", self.port])
+
+    # ---- 2. record ----
+
+    def kept(self):
+        index = self.home / "recordings" / "index.json"
+        if not index.is_file():
+            return {}
+        scenes = json.loads(index.read_text()).get("scenes", {})
+        return {name[:2]: row.get("kept") for name, row in scenes.items() if row.get("kept")}
+
+    def record(self):
+        kept = self.kept()
+        if len(kept) == 11:
+            print("build: all eleven scenes have a kept take; recording skipped", flush=True)
+            return
+        if kept:
+            raise BuildError(f"scenes {', '.join(sorted(kept))} are kept and the rest are not: finish them with "
+                             "demo/scenes/record, or build a fresh sandbox with --home")
+        if not self.voice:
+            raise BuildError("recording needs the user's lines: --voice <dir with line-1.wav to line-4.wav>")
+        missing = [n for n in LINES if not (self.voice / n).is_file()]
+        if missing:
+            raise BuildError(f"{self.voice} has no {', '.join(missing)}")
+        try:
+            self.services()
+            for name in LINES:
+                self.run(["demo/scenes/harbor", "mic", self.voice / name, self.home / "recordings" / "mic" / name], sandbox=True)
+            for kind, what in DAY:
+                getattr(self, f"day_{kind}")(what)
+        finally:
+            self.stop_all()
+
+    def services(self):
+        self.start("deck", ["keel", "serve"])
+        self.start("drain", ["keel", "drain"])
+        self.start("voice", ["demo/scenes/harbor", "gateway", "--fresh"])
+        self.until(lambda: self.http(f"http://127.0.0.1:{self.port}/"), 60, "the sandbox deck")
+        self.until(lambda: self.http(f"http://127.0.0.1:{self.port - 4400}/voice/health"), 60, "the sandbox's Harbor")
+
+    def http(self, url):
+        return subprocess.run(["curl", "-sf", "-o", "/dev/null", url]).returncode == 0
+
+    def until(self, ok, seconds, what):
+        if self.dry:
+            return
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if ok():
+                return
+            time.sleep(min(15, max(1, seconds / 60)))
+        raise BuildError(f"{what} did not come up in {seconds} s")
+
+    def day_seed(self, phase):
+        self.run(["demo/seed", phase], sandbox=True)
+
+    def day_card(self, _):
+        listing = self.run(["kb", "list", "--space", "work"], sandbox=True, capture=True).stdout
+        found = [line.split()[0] for line in listing.splitlines() if EXPORT_TITLE in line]
+        self.card = found[-1] if found else ("c-DRYRUN" if self.dry else None)
+        if not self.card:
+            raise BuildError("scene 4 filed no export card")
+        print(f"build: the export card is {self.card}", flush=True)
+
+    def stage(self):
+        shown = self.run(["kb", "show", self.card], sandbox=True, capture=True).stdout
+        match = re.match(r"\S+\s+\S+\s+(\S+)", shown)
+        return match.group(1) if match else ""
+
+    def day_wait(self, stage):
+        order = ["assigned", "planning", "building", "review", "shipping", "done"]
+
+        def reached():
+            now = self.stage()
+            if now == "blocked":
+                raise BuildError(f"{self.card} blocked on its way to {stage}")
+            return now in order and order.index(now) >= order.index(stage)
+        self.until(reached, WAIT, f"{self.card} at {stage}")
+
+    def day_scene(self, scene):
+        sets = ["--set", f"card={self.card}"] if self.card else []
+        for attempt in range(1 if scene in LIVE else TAKES):
+            done = self.run(["demo/scenes/record", scene, *sets], sandbox=True, check=False, capture=True)
+            take = json.loads(done.stdout or "{}").get("take") if not self.dry else "take-1"
+            if scene in VOICE_SCENES and take:
+                name = next((HERE / "scenes").glob(f"{scene}-*.json")).stem
+                self.run(["demo/scenes/harbor", "capture", name, take], sandbox=True, check=False)
+                self.run(["demo/scenes/record", "--sweep", name, take], sandbox=True, check=False)
+            if self.dry or scene in self.kept():
+                return
+            print(f"build: scene {scene} take {attempt + 1} was not kept", flush=True)
+        raise BuildError(f"scene {scene} has no keepable take")
+
+    # ---- 3. edit ----
+
+    def edit(self):
+        if not (VIDEO / "node_modules").is_dir():
+            self.run(["npm", "ci", "--no-audit", "--no-fund"], cwd=VIDEO)
+        if not self.voice:
+            raise BuildError("the edit needs the user's lines: --voice <dir with the lines the cut plays "
+                             "(the film's and short-01's are among line-1.wav to line-4.wav)>")
+        cut = ["--cut", self.cut]
+        self.run(["node", "prepare.mjs", "--recordings", self.home / "recordings", "--voice", self.voice, *cut], cwd=VIDEO)
+        self.run(["node", "render.mjs", "--out", self.out, *cut], cwd=VIDEO)
+        self.run(["node", "evidence.mjs", "--out", self.out, *cut], cwd=VIDEO)
+
+
+def main(argv):
+    cuts = next(part for part in __doc__.split("\n\n") if part.startswith("--cut picks"))
+    parser = argparse.ArgumentParser(prog="demo/build", description=__doc__.split("\n\n")[0], epilog=cuts,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--out", required=True, help="where the MP4, the .srt and the evidence go")
+    parser.add_argument("--home", default=os.environ.get("KEEL_SANDBOX") or "~/keel-sandbox")
+    parser.add_argument("--port", type=int, default=8890)
+    parser.add_argument("--voice", help="the user's lines, line-1.wav to line-4.wav")
+    parser.add_argument("--cut", default="film", choices=CUTS, help="film (the default), or a short: short-01 "
+                        "(1080x1350, about 35 s; plays line-1.wav and line-4.wav from --voice)")
+    parser.add_argument("--edit-only", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+    if os.environ.get("KEEL_LIVE_STATE"):
+        print("build: KEEL_LIVE_STATE is set; the demo never runs against the live board", file=sys.stderr)
+        return 2
+    if not VIDEO.is_dir() and not args.dry_run:
+        print("build: demo/video is not in this tree: the public release leaves out the video's edit "
+              "and its music, so the film cannot be built from it", file=sys.stderr)
+        return 2
+    build = Build(args)
+    try:
+        if not args.edit_only:
+            build.setup()
+            build.record()
+        build.edit()
+    except BuildError as error:
+        print(f"build: {error}", file=sys.stderr)
+        return 1
+    finally:
+        build.stop_all()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

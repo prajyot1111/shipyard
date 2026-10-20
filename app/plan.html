@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" data-mode="work" data-density="work">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Plan</title>
+<meta name="theme-color" content="#101418">
+<link rel="icon" href="/icons/keel-tile.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/keel-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/icons/keel-180.png">
+<link rel="stylesheet" href="/ui.css">
+<link rel="stylesheet" href="/ui.plan.css">
+<script>
+/* A plan or an outcome, as a page of its own (P2-5): not the deck's shell, so there is no
+   rail, no header and no dock, only the document, its slim header and the round. It wears
+   its CARD's palette once the plan has loaded (T1); until then the one this browser last
+   used, or ?space= for a screenshot, so nothing flashes. */
+(function () {
+  var q = new URLSearchParams(location.search);
+  var m = q.get('space');
+  try { m = m || localStorage.getItem('keel.space'); } catch (e) { /* a private window is not an error */ }
+  if (m === 'work' || m === 'personal') document.documentElement.setAttribute('data-mode', m);
+  var CANVAS = { work: '#101418', personal: '#161412' };
+  var tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute('content', CANVAS[document.documentElement.getAttribute('data-mode')] || CANVAS.work);
+})();
+</script>
+</head>
+<body class="planpage">
+<main class="planpage-body" id="body"></main>
+<div id="sheet"></div>
+<div id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/ui.core.js"></script>
+<script src="/ui.live.js"></script>
+<!-- the board's own drawing (ui.boardlayout, ui.board, ui.planlook, ui.plandiagram) is
+     fetched by ui.planblocks.js when the first diagram needs it (P4-7), not here -->
+<!-- code in colour and a review finding as one card (lane FC); the colouring library itself is
+     imported by ui.plancode.js when the first code block needs it, not here -->
+<script src="/ui.plancode.js"></script>
+<script src="/ui.planfinding.js"></script>
+<script src="/ui.receipt.js"></script>
+<script src="/ui.planblocks.js"></script>
+<script src="/ui.plan.js"></script>
+<script src="/ui.ci.js"></script>
+<script src="/ui.shipping.js"></script>
+<script src="/ui.shipsendback.js"></script>
+<script src="/ui.comments.js"></script>
+<script src="/ui.planpage.js"></script>
+</body>
+</html>

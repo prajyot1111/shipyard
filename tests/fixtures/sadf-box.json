@@ -1,0 +1,193 @@
+{
+ "sysstat": {
+  "hosts": [
+   {
+    "nodename": "harbor",
+    "sysname": "Linux",
+    "release": "6.17.0-1020-oracle",
+    "machine": "aarch64",
+    "number-of-cpus": 2,
+    "file-date": "2026-09-18",
+    "file-utc-time": "00:00:06",
+    "timezone": "UTC",
+    "statistics": [
+     {
+      "timestamp": {
+       "date": "2026-09-18",
+       "time": "00:10:06",
+       "utc": 1,
+       "interval": 600
+      },
+      "cpu-load": [
+       {
+        "cpu": "all",
+        "user": 0.31,
+        "nice": 0.0,
+        "system": 0.07,
+        "iowait": 0.01,
+        "steal": 0.02,
+        "idle": 99.59
+       }
+      ],
+      "memory": {
+       "memfree": 9396616,
+       "avail": 11645968,
+       "memused": 254144,
+       "memused-percent": 2.08,
+       "buffers": 121924,
+       "cached": 2192524,
+       "commit": 1581380,
+       "commit-percent": 12.95,
+       "active": 768560,
+       "inactive": 1688928,
+       "dirty": 3240
+      },
+      "network": {
+       "net-dev": [
+        {
+         "iface": "lo",
+         "rxpck": 0.1,
+         "txpck": 0.1,
+         "rxkB": 0.01,
+         "txkB": 0.01,
+         "rxcmp": 0.0,
+         "txcmp": 0.0,
+         "rxmcst": 0.0,
+         "ifutil-percent": 0.0
+        },
+        {
+         "iface": "enp0s6",
+         "rxpck": 2.07,
+         "txpck": 2.06,
+         "rxkB": 0.44,
+         "txkB": 1.11,
+         "rxcmp": 0.0,
+         "txcmp": 0.0,
+         "rxmcst": 0.0,
+         "ifutil-percent": 0.0
+        }
+       ]
+      }
+     },
+     {
+      "timestamp": {
+       "date": "2026-09-18",
+       "time": "00:20:03",
+       "utc": 1,
+       "interval": 596
+      },
+      "cpu-load": [
+       {
+        "cpu": "all",
+        "user": 0.43,
+        "nice": 0.0,
+        "system": 0.07,
+        "iowait": 0.01,
+        "steal": 0.01,
+        "idle": 99.48
+       }
+      ],
+      "memory": {
+       "memfree": 9392120,
+       "avail": 11641524,
+       "memused": 258584,
+       "memused-percent": 2.12,
+       "buffers": 121924,
+       "cached": 2192576,
+       "commit": 1584492,
+       "commit-percent": 12.97,
+       "active": 768612,
+       "inactive": 1688980,
+       "dirty": 3004
+      },
+      "network": {
+       "net-dev": [
+        {
+         "iface": "lo",
+         "rxpck": 0.11,
+         "txpck": 0.11,
+         "rxkB": 0.02,
+         "txkB": 0.02,
+         "rxcmp": 0.0,
+         "txcmp": 0.0,
+         "rxmcst": 0.0,
+         "ifutil-percent": 0.0
+        },
+        {
+         "iface": "enp0s6",
+         "rxpck": 1.95,
+         "txpck": 1.98,
+         "rxkB": 0.44,
+         "txkB": 1.11,
+         "rxcmp": 0.0,
+         "txcmp": 0.0,
+         "rxmcst": 0.0,
+         "ifutil-percent": 0.0
+        }
+       ]
+      }
+     },
+     {
+      "timestamp": {
+       "date": "2026-09-18",
+       "time": "00:30:06",
+       "utc": 1,
+       "interval": 604
+      },
+      "cpu-load": [
+       {
+        "cpu": "all",
+        "user": 0.04,
+        "nice": 0.0,
+        "system": 0.03,
+        "iowait": 0.0,
+        "steal": 0.01,
+        "idle": 99.91
+       }
+      ],
+      "memory": {
+       "memfree": 9392452,
+       "avail": 11641876,
+       "memused": 258240,
+       "memused-percent": 2.11,
+       "buffers": 121924,
+       "cached": 2192596,
+       "commit": 1581376,
+       "commit-percent": 12.95,
+       "active": 766696,
+       "inactive": 1689000,
+       "dirty": 12
+      },
+      "network": {
+       "net-dev": [
+        {
+         "iface": "lo",
+         "rxpck": 0.07,
+         "txpck": 0.07,
+         "rxkB": 0.01,
+         "txkB": 0.01,
+         "rxcmp": 0.0,
+         "txcmp": 0.0,
+         "rxmcst": 0.0,
+         "ifutil-percent": 0.0
+        },
+        {
+         "iface": "enp0s6",
+         "rxpck": 1.58,
+         "txpck": 1.64,
+         "rxkB": 0.28,
+         "txkB": 1.01,
+         "rxcmp": 0.0,
+         "txcmp": 0.0,
+         "rxmcst": 0.0,
+         "ifutil-percent": 0.0
+        }
+       ]
+      }
+     }
+    ],
+    "restarts": []
+   }
+  ]
+ }
+}

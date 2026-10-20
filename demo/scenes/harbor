@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""The sandbox's Harbor: a voice gateway on the sandbox board, and his answers as audio.
+
+    demo/sandbox/run demo/scenes/harbor gateway [--fresh]          the gateway, in the foreground
+    demo/sandbox/run demo/scenes/harbor capture <scene> <take>     his answers in that take, as wav
+    demo/sandbox/run demo/scenes/harbor say <out.wav> <text>       one line, synthesized
+    demo/sandbox/run demo/scenes/harbor mic <his.wav> <out.wav>    his line, ready to be a mic
+
+WHY A LAUNCHER AND NOT `bin/keel-voice-gateway`. That gateway finds everything from the
+checkout it runs in: its state under `state/`, its conversation in `state/voice-session.json`,
+and Harbor's turns under `spaces/harbor/.claude` of the same checkout. A worktree's Harbor
+config dir has the rulebook and no login, so every turn from it fails. This runs the same
+gateway (`harbor_voice.server.serve`) with four things moved:
+
+- its state, its conversation and its transcript go under `<sandbox>/harbor/state`, so the
+  conversation is FRESH (`--fresh` starts another) and nothing lands in any checkout;
+- Harbor's turns run in `<sandbox>/harbor/`, whose `CLAUDE.md` is the small memory in
+  `demo/scenes/harbor-memory.md`: the sandbox's own facts, and nothing about his machines
+  or his real cards (c-569's open question), and whose `.claude/settings.json` is `fence`:
+  denies that keep the turns off the live state whatever the memory says;
+- the turns use the machine's Harbor config dir (`~/keel/spaces/harbor/.claude`, or
+  `--config-dir`): the one that holds Harbor's login and rulebook and no work credential;
+- the board is the sandbox's: `KEEL_CONFIG` reaches every `kb` and `keel board push` a
+  turn runs, and `KEEL_SERVE_PORT` is the sandbox deck's, which the gateway reads digests
+  from.
+
+CAPTURE. The gateway streams its speech to the page and keeps no copy, so each answer's
+audio is SYNTHESIZED AGAIN from the transcript's text: the same words, the same voice, not
+the bytes that played (and without the filler the gateway said while it waited). It is
+pinned to the engine the page says spoke live (its provenance line, "Harbor · 8s · Google",
+is in the take's page text), and refuses rather than falls back when that engine will not
+speak, so `answers.json` never names a voice he did not hear; a take whose page names no
+voice (none, or the browser's own) gets no audio at all.
+`harbor/NN.txt` holds each answer's whole text, which `demo/scenes/record --sweep` checks.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import sys
+import tomllib
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+KEEL_HOME = HERE.parent.parent
+VENV_PY = KEEL_HOME / ".venv-voice" / "bin" / "python"
+LIVE_KEEL = Path("~/keel").expanduser()
+HARBOR_CONFIG = LIVE_KEEL / "spaces" / "harbor" / ".claude"
+CREDENTIALS = Path("~/.config/keel/credentials").expanduser()
+
+
+def sandbox() -> Path:
+    home, config = os.environ.get("KEEL_SANDBOX"), os.environ.get("KEEL_CONFIG")
+    if not home or not config or Path(config) != Path(home) / "keel.toml" or not (Path(home) / ".keel-sandbox").is_file():
+        raise SystemExit("harbor: run me under demo/sandbox/run, which names the sandbox's toml")
+    return Path(home)
+
+
+def into_venv() -> None:
+    """The speech stack lives in .venv-voice; re-exec there once, as the gateway does."""
+    if os.environ.get("HARBOR_VOICE_REEXEC") or not VENV_PY.exists():
+        return
+    if Path(sys.prefix).resolve() == VENV_PY.parent.parent.resolve():
+        return
+    os.execve(str(VENV_PY), [str(VENV_PY), str(Path(__file__).resolve()), *sys.argv[1:]],
+              {**os.environ, "HARBOR_VOICE_REEXEC": "1"})
+
+
+def ports(home: Path) -> tuple[int, int]:
+    toml = tomllib.loads((home / "keel.toml").read_text())
+    return toml["keel"]["serve_port"], toml["voice"]["port"]
+
+
+def fence(live: Path) -> dict:
+    """The sandbox Harbor's fence, as permission denies: its turns run in the machine's
+    Harbor config dir, so what keeps them off the live board is a rule the harness enforces,
+    not a sentence in its memory. It never reads or writes the live state, never lists the
+    machine's sessions, and never points `kb` at another toml."""
+    state = live / "state"
+    return {"permissions": {"deny": [
+        f"Read(/{state}/**)", f"Edit(/{state}/**)", f"Write(/{state}/**)",
+        f"Bash(*{state}*)", "Bash(*keel/state*)", "Bash(claude agents*)", "Bash(*claude agents*)",
+        "Bash(*KEEL_CONFIG=*)", "Bash(*KEEL_LIVE_STATE*)", "Bash(*KEEL_URL*)"]}}
+
+
+def configure(home: Path, config_dir: Path, fresh: bool = False):
+    """Point the voice package at the sandbox BEFORE any of its modules is imported, since
+    several of them turn these paths into module constants on import."""
+    deck, voice = ports(home)
+    root = home / "harbor"
+    state = root / "state"
+    state.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(HERE / "harbor-memory.md", root / "CLAUDE.md")
+    (root / ".claude").mkdir(exist_ok=True)     # the project settings of the turns' cwd
+    (root / ".claude" / "settings.json").write_text(json.dumps(fence(LIVE_KEEL), indent=2) + "\n")
+    if fresh:
+        (state / "voice-session.json").unlink(missing_ok=True)
+    os.environ.update(KEEL_SERVE_PORT=str(deck), HARBOR_VOICE_PORT=str(voice), HARBOR_VOICE_SPACE_DEFAULT="work",
+                      HARBOR_VOICE_MODE_DEFAULT="talk", HARBOR_VOICE_TTS="google,kokoro-onnx,browser",
+                      KEEL_SEGMENTS_DIR=str(home / "segments"))
+    if (CREDENTIALS / "google-tts-key").is_file():
+        os.environ["CREDENTIALS_DIRECTORY"] = str(CREDENTIALS)
+    sys.path.insert(0, str(KEEL_HOME / "voice"))
+    from harbor_voice import config  # noqa: PLC0415
+    config.STATE, config.DATA = state, state / "voice"
+    config.TALKER_CONFIG_DIR, config.TALKER_CWD = config_dir, root
+    config.VOICE_SESSION_FILE = state / "voice-session.json"
+    config.VOICE_SESSION_LEGACY = state / "voice-session"
+    config.TALKER_PID_FILE = state / "talker.pid"
+    config.JUDGES_SWITCH, config.JUDGES_LOG = config.DATA / "judges.json", config.DATA / "judges.jsonl"
+    config.RECORD_DIR = config.DATA / "pcm"
+    config.SEGMENTS_DIR = home / "segments"
+    return config, voice
+
+
+# ----- his line as a microphone -----
+
+LEAD_S, TAIL_S, PEAK = 0.4, 1.2, 0.7
+
+
+def mic(source: Path, out: Path) -> dict:
+    """His recorded line as Chromium's fake microphone wants it: 16-bit PCM, a little
+    silence before (his takes start on the first sample) and after (the device loops the
+    file, so the hold ends inside silence), and lifted to a speaking level, since the takes
+    sit near -38 dB and the recogniser hears a whisper badly. Only for the mic: the edit
+    cleans his lines for the video on its own."""
+    import numpy as np  # noqa: PLC0415 - .venv-voice
+    import soundfile as sf  # noqa: PLC0415
+    data, rate = sf.read(str(source), dtype="float32", always_2d=True)
+    mono = data.mean(axis=1)
+    peak = float(np.abs(mono).max()) or 1.0
+    mono = mono * (PEAK / peak)
+    pad = lambda s: np.zeros(int(s * rate), dtype="float32")  # noqa: E731
+    whole = np.concatenate([pad(LEAD_S), mono, pad(TAIL_S)])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(str(out), whole, rate, subtype="PCM_16")
+    return {"wav": str(out), "seconds": round(len(whole) / rate, 2), "speech": round(len(mono) / rate, 2),
+            "lead": LEAD_S, "rate": rate}
+
+
+# ----- capture -----
+
+def engines():
+    """Google first when its key is there, then kokoro-onnx: the gateway's own order."""
+    from harbor_voice import config, onnx, speech  # noqa: PLC0415
+    chain = []
+    if config.CREDENTIALS_DIRECTORY:        # the package takes it out of the environment on load
+        chain.append(("google", speech.GoogleTTS))
+    chain.append(("kokoro-onnx", onnx.KokoroOnnxTTS))
+    return speech, chain
+
+
+def synthesize(text: str, out: Path, only: str = "") -> dict:
+    speech, chain = engines()
+    if only:
+        chain = [(name, make) for name, make in chain if name == only]
+    tried = []
+    for name, make in chain:
+        try:
+            engine = make()
+            pcm = b"".join(engine.synthesize(text))
+        except Exception as exc:  # noqa: BLE001 - the next engine is the answer to any failure
+            tried.append(f"{name}: {exc.__class__.__name__}")
+            continue
+        if not pcm:
+            tried.append(f"{name}: no samples")
+            continue
+        out.write_bytes(speech.wav_bytes(pcm, 24000))
+        return {"engine": name, "voice": getattr(engine, "voice", "") or getattr(engine, "name", ""),
+                "seconds": round(len(pcm) / 2 / 24000, 2), "wav": out.name, "tried": tried}
+    raise SystemExit(f"harbor: no engine spoke: {'; '.join(tried)}")
+
+
+def answers_in(transcript: Path, start: float, end: float) -> list[dict]:
+    """Every answered turn inside the take's window, in order, one per turn."""
+    turns = {}
+    for line in transcript.read_text().splitlines() if transcript.is_file() else []:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if start <= row.get("at", 0) <= end and row.get("answer") and row.get("turn"):
+            turns[row["turn"]] = row             # the last line of a turn holds its whole answer
+    return sorted(turns.values(), key=lambda r: r["at"])
+
+
+LIVE_ENGINES = {"google": "google", "kokoro": "kokoro-onnx"}
+
+
+def live_engine(timeline: dict) -> str:
+    """The engine the page's provenance line names for the last answer, or "". Every step's
+    text is read, since a scene may leave the voice page once the answer is in."""
+    text = "\n".join(step.get("text", "") for step in timeline.get("steps") or [])
+    found = re.findall(r"·\s*(Google|Kokoro)\b", text, re.I)
+    return LIVE_ENGINES[found[-1].lower()] if found else ""
+
+
+def capture(home: Path, scene: str, take: str, config) -> list[dict]:
+    found = sorted((home / "recordings").glob(f"{scene}*/{take}"))
+    if len(found) != 1:
+        raise SystemExit(f"harbor: no single take {scene}/{take} under {home / 'recordings'}")
+    take_dir = found[0]
+    timeline = json.loads((take_dir / "clip.timeline.json").read_text())
+    start = timeline["t0_epoch"]
+    rows = answers_in(config.DATA / "transcript.jsonl", start, start + timeline["duration"] + 5)
+    live = live_engine(timeline)
+    if rows and not live:
+        raise SystemExit("harbor: the page names no voice for this take's answers (no Google or Kokoro "
+                         "on its provenance line), so no audio is written rather than one in a voice he did not hear")
+    out = take_dir / "harbor"
+    out.mkdir(exist_ok=True)
+    kept = []
+    for n, row in enumerate(rows, 1):
+        # Both texts are swept: what the page shows (`written`) and what is spoken, which
+        # differ when Harbor drew or wrote more than it said.
+        (out / f"{n:02d}.txt").write_text((row.get("written") or row["answer"]) + "\n")
+        (out / f"{n:02d}.said.txt").write_text(row["answer"] + "\n")
+        spoken = synthesize(row["answer"], out / f"{n:02d}.wav", only=live)
+        kept.append({"n": n, "turn": row["turn"], "at": round(row["at"] - start, 2), "asked": row.get("said", ""),
+                     "answer": row["answer"], "mode": row.get("mode", ""), "live": live,
+                     "resynthesized": True, **spoken})
+    (out / "answers.json").write_text(json.dumps(kept, indent=2) + "\n")
+    return kept
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="demo/scenes/harbor", description=__doc__.split("\n\n")[0])
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    g = sub.add_parser("gateway")
+    g.add_argument("--fresh", action="store_true")
+    g.add_argument("--config-dir", type=Path, default=HARBOR_CONFIG)
+    c = sub.add_parser("capture")
+    c.add_argument("scene")
+    c.add_argument("take")
+    m = sub.add_parser("mic")
+    m.add_argument("source", type=Path)
+    m.add_argument("out", type=Path)
+    s = sub.add_parser("say")
+    s.add_argument("out", type=Path)
+    s.add_argument("text")
+    args = parser.parse_args(argv)
+    home = sandbox()
+    into_venv()
+    if args.cmd == "mic":
+        print(json.dumps(mic(args.source, args.out)))
+        return 0
+    config, port = configure(home, getattr(args, "config_dir", HARBOR_CONFIG), getattr(args, "fresh", False))
+    if args.cmd == "gateway":
+        print(f"harbor: sandbox gateway on {port}, turns in {config.TALKER_CWD}, state {config.STATE}", flush=True)
+        from harbor_voice.server import serve  # noqa: PLC0415
+        return serve(port)
+    if args.cmd == "say":
+        print(json.dumps(synthesize(args.text, args.out)))
+        return 0
+    print(json.dumps(capture(home, args.scene, args.take, config), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

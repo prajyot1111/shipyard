@@ -1,0 +1,31 @@
+# Runtime files Claude Code writes into its config dir. Only the settings are tracked. The
+# rulebook (CLAUDE.md) and the memory live in the install (<install>/memory/talker/), linked
+# in by `keel talker install`; a skill linked in here is this machine's own.
+CLAUDE.md
+skills/
+projects/
+sessions/
+cache/
+history.jsonl
+shell-snapshots/
+telemetry/
+file-history/
+paste-cache/
+session-env/
+uploads/
+backups/
+plugins/
+.claude.json
+# The login on Linux, where there is no keychain: on the box this dir is inside the
+# ~/keel checkout, so without this line a credential is one `git add -A` from a commit.
+.credentials.json
+.claude.json.backup*
+.last-cleanup
+.last-update-result.json
+chrome/
+commands/
+settings.local.json
+skills/synced/
+daemon/
+daemon.log
+jobs/

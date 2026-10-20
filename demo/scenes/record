@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""Record one take of one scene against the sandbox deck, sweep it, and index it.
+
+    demo/sandbox/run demo/scenes/record <scene> [--set k=v ...] a new take, e.g. `04` or `04-start`
+    demo/sandbox/run demo/scenes/record <scene> --keep <take>   mark which take the edit uses
+    demo/sandbox/run demo/scenes/record --sweep <scene> <take>  sweep again (after Harbor's text lands)
+    demo/sandbox/run demo/scenes/record --index                 print the index
+
+A scene is `demo/scenes/NN-name.json`: a `keel-browser video` steps file with three more keys
+this script reads, `start` (the deck path the clip opens on), `seed` (the phase of the day the
+board must be at, which the take records) and `harbor` (the questions Harbor is asked in it,
+for a scene where he speaks). `{{card}}` and any other `{{key}}` in the file is filled from
+`--set key=value`, since the live card's id is only known once scene 4 has filed it; the
+filled file is kept in the take as `steps.json`, so a take says exactly what it played. A
+scene whose `mic` names his line (`line-N.wav`) hears the mic-ready copy `demo/scenes/harbor
+mic` made of it under `recordings/mic/`. A take is `recordings/NN-name/take-K/`: `clip.webm`,
+`clip.stills/`, `clip.timeline.json`, `sweep.json`, and `harbor/` when Harbor spoke
+(`demo/scenes/harbor` writes that). `recordings/index.json` names every take and the kept one,
+and each take's row carries `day`, the version of the seeded day it was recorded on (the seed
+writes it into the index as `day`, `demo/seeding/day.py` DAY_VERSION), so the edit refuses a
+take of an older day. A resweep keeps the take's own `day`.
+
+THE SWEEP. Every step's page text (the timeline's `text`) and every Harbor answer's text is
+matched against every pack's `drift-terms`, the word list `make drift` greps with, and against
+`MACHINE`, the shapes of this machine's own paths (a home directory, a config dir, a
+credential), which no frame may show either. A hit rejects the take: it is kept on disk for
+the record and never becomes the kept take, and a kept take that a later sweep finds dirty
+(Harbor's text arrives after the clip) stops being the kept one. The hits are written as the
+term's number and the step, never the matched words, so the index is safe to read anywhere.
+A scene where Harbor speaks is kept only once its answers are captured and swept.
+
+It runs only under `demo/sandbox/run`, which names the sandbox's toml and refuses any board
+that is not the sandbox's; the deck it records is that toml's port on this machine.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import tomllib
+from datetime import datetime
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+KEEL_HOME = HERE.parent.parent
+TERMS = KEEL_HOME / "packs"                 # each pack's drift-terms
+BROWSER = KEEL_HOME / "bin" / "keel-browser"
+
+
+class RecordError(Exception):
+    pass
+
+
+def sandbox() -> Path:
+    """The sandbox home, only when `demo/sandbox/run` put us in it."""
+    home = os.environ.get("KEEL_SANDBOX")
+    config = os.environ.get("KEEL_CONFIG")
+    if not home or not config or Path(config) != Path(home) / "keel.toml":
+        raise RecordError("run me under demo/sandbox/run, which names the sandbox's toml")
+    if not (Path(home) / ".keel-sandbox").is_file():
+        raise RecordError(f"{home} is not a sandbox")
+    return Path(home)
+
+
+def deck_url(home: Path) -> str:
+    port = tomllib.loads((home / "keel.toml").read_text())["keel"]["serve_port"]
+    return f"http://127.0.0.1:{port}"
+
+
+def scene_file(name: str) -> Path:
+    found = sorted(HERE.glob(f"{name}*.json")) if re.fullmatch(r"\d\d(-[a-z0-9-]+)?", name) else []
+    if len(found) != 1:
+        raise RecordError(f"no single scene named {name!r} under {HERE}")
+    return found[0]
+
+
+# ----- the sweep -----
+
+def terms() -> list[re.Pattern]:
+    lines = [line for path in sorted(TERMS.glob("*/drift-terms")) for line in path.read_text().splitlines()]
+    return [re.compile(line.strip(), re.I) for line in lines if line.strip() and not line.startswith("#")]
+
+
+# This machine's own paths, which no frame may show (Bosun's Logins panel prints them).
+MACHINE = [re.compile(p) for p in (r"/home/[a-z_][\w.-]*/", r"/Users/[\w.-]+/", r"\.claude\b", r"\.config/keel",
+                                   r"CLAUDE_CONFIG_DIR", r"credentials/")]
+
+
+def sweep_texts(texts: dict[str, str], patterns: list[re.Pattern], kind: str = "term") -> list[dict]:
+    """Where a pattern matched: the text's key and the pattern's number, not the words."""
+    return [{"in": key, kind: n + 1} for key, text in texts.items()
+            for n, pattern in enumerate(patterns) if pattern.search(text or "")]
+
+
+def take_texts(take: Path) -> dict[str, str]:
+    texts = {}
+    timeline = take / "clip.timeline.json"
+    if timeline.is_file():
+        for step in json.loads(timeline.read_text()).get("steps", []):
+            texts[f"step {step['key']}"] = step.get("text", "")
+    for answer in sorted((take / "harbor").glob("*.txt")):
+        texts[f"harbor {answer.name}"] = answer.read_text()
+    return texts
+
+
+def sweep(take: Path) -> dict:
+    patterns = terms()
+    if not patterns:
+        raise RecordError(f"no drift-terms under {TERMS}: a sweep with no terms would pass anything")
+    texts = take_texts(take)
+    hits = sweep_texts(texts, patterns) + sweep_texts(texts, MACHINE, "machine")
+    result = {"clean": True, "checked": len(texts), "terms": len(patterns), "hits": hits}
+    result["clean"] = not result["hits"] and bool(texts)      # nothing read is not clean
+    (take / "sweep.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+# ----- the index -----
+
+def index_path(home: Path) -> Path:
+    return home / "recordings" / "index.json"
+
+
+def load_index(home: Path) -> dict:
+    path = index_path(home)
+    return json.loads(path.read_text()) if path.is_file() else {"version": 1, "scenes": {}}
+
+
+def save_index(home: Path, index: dict) -> None:
+    path = index_path(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(index, indent=2) + "\n")
+    path.with_suffix(".md").write_text(index_md(index))
+
+
+def index_md(index: dict) -> str:
+    """The same index for a person: one line per take, the kept one marked."""
+    lines = ["# Recordings", "", "One folder per scene, one per take; the kept take is the one the edit uses.", ""]
+    for name, row in sorted(index["scenes"].items()):
+        lines.append(f"## {name}")
+        for t in row["takes"]:
+            sweep = t.get("sweep") or {}
+            said = "clean" if sweep.get("clean") else f"{len(sweep.get('hits', []))} sweep hit(s)"
+            voice = ", ".join(sorted({a.get("live") or a["engine"] for a in t.get("harbor") or []})) or "no Harbor"
+            mark = "KEPT " if t["take"] == row.get("kept") else ""
+            lines.append(f"- {mark}{t['take']}: {'ok' if t['ok'] else 'failed: ' + t.get('failed', '')}, "
+                         f"{t.get('duration')}s, {t.get('steps')} steps, {said}, {voice}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def entry_of(take: Path, spec: dict, code: int, day: int | None = None) -> dict:
+    timeline = take / "clip.timeline.json"
+    doc = json.loads(timeline.read_text()) if timeline.is_file() else {}
+    harbor = take / "harbor" / "answers.json"
+    return {
+        "take": take.name,
+        "at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "ok": code == 0 and not doc.get("failed"),
+        "failed": doc.get("failed", "" if code == 0 else f"keel-browser exited {code}"),
+        "seed": spec.get("seed", ""),
+        "day": day,
+        "speaks": bool(spec.get("harbor")),
+        "viewport": doc.get("viewport") or spec.get("viewport"),
+        "duration": doc.get("duration"),
+        "steps": len(doc.get("steps", [])),
+        "sweep": json.loads((take / "sweep.json").read_text()) if (take / "sweep.json").is_file() else None,
+        "harbor": json.loads(harbor.read_text()) if harbor.is_file() else None,
+    }
+
+
+def keepable(entry: dict) -> bool:
+    if entry.get("speaks") and not entry.get("harbor"):
+        return False                       # Harbor spoke here: not kept until his text is swept
+    return entry["ok"] and bool(entry.get("sweep")) and entry["sweep"]["clean"]
+
+
+def record_entry(home: Path, scene: str, entry: dict) -> dict:
+    """Add or replace a take's row. The first keepable take is kept; a kept take that is
+    no longer keepable (a later sweep found it dirty) hands over to the newest one that is,
+    or to none."""
+    index = load_index(home)
+    row = index["scenes"].setdefault(scene, {"takes": [], "kept": None})
+    row["takes"] = [t for t in row["takes"] if t["take"] != entry["take"]] + [entry]
+    if row["kept"] == entry["take"] and not keepable(entry):
+        others = [t["take"] for t in row["takes"] if t["take"] != entry["take"] and keepable(t)]
+        row["kept"] = others[-1] if others else None
+    elif row["kept"] is None and keepable(entry):
+        row["kept"] = entry["take"]
+    save_index(home, index)
+    return row
+
+
+def keep(home: Path, scene: str, take: str) -> dict:
+    index = load_index(home)
+    row = index["scenes"].get(scene)
+    entry = next((t for t in (row or {}).get("takes", []) if t["take"] == take), None)
+    if not entry:
+        raise RecordError(f"{scene} has no {take}")
+    if not keepable(entry):
+        raise RecordError(f"{scene} {take} failed or did not sweep clean, so it cannot be the kept take")
+    row["kept"] = take
+    save_index(home, index)
+    return row
+
+
+# ----- one take -----
+
+def next_take(scene_dir: Path) -> Path:
+    used = [int(p.name.split("-")[1]) for p in scene_dir.glob("take-*") if p.name.split("-")[1].isdigit()]
+    return scene_dir / f"take-{max(used, default=0) + 1}"
+
+
+def filled(text: str, values: dict[str, str]) -> str:
+    for key, value in values.items():
+        text = text.replace("{{" + key + "}}", value)
+    left = sorted(set(re.findall(r"\{\{([a-z_]+)\}\}", text)))
+    if left:
+        raise RecordError(f"the scene needs --set for: {', '.join(left)}")
+    return text
+
+
+def settle_mic(home: Path, spec: dict) -> dict:
+    """A scene's `mic` is his line's name; the take hears the mic-ready copy."""
+    if spec.get("mic"):
+        ready = home / "recordings" / "mic" / Path(spec["mic"]).name
+        if not ready.is_file():
+            raise RecordError(f"no mic-ready {ready.name}: make it with demo/scenes/harbor mic <his wav> {ready}")
+        spec["mic"] = str(ready)
+    return spec
+
+
+def record(home: Path, scene: str, values: dict[str, str]) -> tuple[str, dict]:
+    path = scene_file(scene)
+    spec = settle_mic(home, json.loads(filled(path.read_text(), values)))
+    name = path.stem
+    take = next_take(home / "recordings" / name)
+    take.mkdir(parents=True)
+    (take / "steps.json").write_text(json.dumps(spec, indent=2) + "\n")
+    url = deck_url(home) + spec.get("start", "/")
+    done = subprocess.run([str(BROWSER), "video", url, str(take / "steps.json"), str(take / "clip.webm")],
+                          capture_output=True, text=True)
+    (take / "browser.log").write_text(done.stdout + done.stderr)
+    sweep(take)
+    entry = entry_of(take, spec, done.returncode, load_index(home).get("day"))
+    record_entry(home, name, entry)
+    return name, entry
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="demo/scenes/record", description=__doc__.split("\n\n")[0])
+    parser.add_argument("scene", nargs="?")
+    parser.add_argument("take", nargs="?")
+    parser.add_argument("--keep")
+    parser.add_argument("--sweep", action="store_true")
+    parser.add_argument("--index", action="store_true")
+    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
+    args = parser.parse_args(argv)
+    try:
+        home = sandbox()
+        if args.index:
+            print(json.dumps(load_index(home), indent=2))
+            return 0
+        if not args.scene:
+            parser.error("name a scene")
+        name = scene_file(args.scene).stem
+        if args.keep:
+            print(json.dumps(keep(home, name, args.keep), indent=2))
+            return 0
+        if args.sweep:
+            take = home / "recordings" / name / (args.take or "")
+            if not args.take or not take.is_dir():
+                raise RecordError("--sweep takes a scene and a take, e.g. 06 take-2")
+            spec = json.loads((take / "steps.json").read_text())
+            sweep(take)
+            before = next((t for t in load_index(home)["scenes"].get(name, {}).get("takes", [])
+                           if t["take"] == args.take), {})
+            entry = entry_of(take, spec, 0 if (take / "clip.webm").is_file() else 1, before.get("day"))
+            print(json.dumps(record_entry(home, name, entry), indent=2))
+            return 0 if entry["sweep"]["clean"] else 1
+        values = dict(pair.split("=", 1) for pair in args.set if "=" in pair)
+        name, entry = record(home, args.scene, values)
+    except RecordError as error:
+        print(f"record: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps({"scene": name, **entry}, indent=2))
+    return 0 if keepable(entry) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,25 @@
+board "Event Replay: where the example runs in code"
+group web "web"
+group main "api main service"
+group events "api events service"
+node page globe "Event page" in web "EventDetail.jsx"
+node btn user "Replay button" in web
+node api api "Replay API call" in web "eventsApi.js"
+node ctrl server "Replay controller" in main "controllers/v2/events.py"
+node svc box "Event service" in main
+node db database "Postgres" in main
+node task zap "Celery task" in main
+node ingest server "Ingest endpoint" in events
+node proc cpu "Event processor" in events
+node rules list "Rule engine" in events
+node store database "Events DB" in events
+edge page -> btn
+edge btn -> api
+edge api -> ctrl "POST /replay"
+edge ctrl -> svc
+edge svc -> db
+edge svc -> task
+edge task -> ingest "replay"
+edge ingest -> proc
+edge proc -> rules
+edge rules -> store

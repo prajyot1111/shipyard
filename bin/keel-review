@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""`keel-review prep` and `keel-review answer`: the commands a house runs in the pipeline's
+review step (keel/review/prep.py). Puts the repo root on sys.path and runs main."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.review.prep import main  # noqa: E402
+
+sys.exit(main())

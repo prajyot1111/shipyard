@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""Shipyard's command: `shipyard init <dir>`, `shipyard service <verb>`, and every `keel` verb.
+
+The same CLI as `bin/keel`, which stays as its alias until our own install has moved
+(c-610). docs/atlas/88-install.md."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keel.cli import keel_main  # noqa: E402
+
+sys.exit(keel_main())

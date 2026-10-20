@@ -1,0 +1,309 @@
+#!/usr/bin/env python3
+"""Where would the detector have cut, against where he actually stopped talking.
+
+This is the offline half of V1. The gateway shipped with a deliberately safe 2.5 s hangover
+and records his utterances (voice/harbor_voice/record.py); this reads that corpus back and
+sweeps every candidate hangover over it, so the number the gateway finally runs is
+measured rather than argued for. It was: 2.0 s since 2026-09-24, `[voice] vad_hangover`.
+
+TWO NUMBERS DECIDE THE HANGOVER, and they are the two the card asks for:
+
+  SECONDS SAVED      how much earlier each candidate would have ended the turn than the
+                     recording actually ends. Against the 20 s backstop for the turns
+                     recorded before any detector was live, and against the shipped
+                     hangover for the ones recorded after.
+  CUTS MID-SENTENCE  how often a candidate would have fired while he was still talking.
+                     Defined mechanically: a fire whose cut point is followed by MORE
+                     SPEECH later in the same recording. It needs no labelling by him and
+                     no listening back, which is the only reason this is measurable at
+                     all.
+
+IT RUNS THE GATEWAY'S OWN CODE. `vad.Endpointer` is the class the socket loop feeds, fed
+here with the same frames from a wav instead of from a socket. The measurement and the
+live path cannot drift, because there is only one of them.
+
+PER MODE, because dictating a capture invites longer thinking pauses than talking does,
+and one number for both would be tuned to whichever he does more of. The transcript line
+already carries `mode`, so the join is free.
+
+A NOTE ON WHAT THE CORPUS CAN AND CANNOT SAY. Once a detector is live, a recording ends
+at the shipped hangover, so candidates ABOVE it cannot be evaluated (there is no audio
+past the cut) and are reported as such rather than guessed at. Candidates below it are
+unaffected, and the whole point of the sweep is to come down from 2.5 s toward 700 ms.
+A cut the shipped hangover itself took wrongly is still visible, in the transcript rather
+than the audio: it shows as two turns seconds apart, which `--gaps` prints.
+
+    bin/keel-voice-vad-measure                     the sweep, over everything recorded
+    bin/keel-voice-vad-measure --hangover 0.7      one candidate, per recording
+    bin/keel-voice-vad-measure --gaps              turns that look like a wrong cut
+    bin/keel-voice-vad-measure --two-stage         the two-stage rule (D-6), scored only
+
+THE TWO-STAGE RULE IS SCORED HERE AND NOWHERE ELSE (D-6, c-323). At a short pause (0.7 s)
+the audio so far is transcribed with this machine's own speech model, and the turn ends
+there when the words look finished (`vad.looks_complete`); otherwise it waits for the long
+pause (2 s). `vad.two_stage_fire_at` is the rule, and nothing live calls it: this prints
+the same columns as the sweep, beside the one-number 0.7 s and 2 s, so the choice can be
+made on his own corpus. It only reads the recordings; it changes no setting.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import wave
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "voice"))
+
+from harbor_voice import config, vad as vadmod            # noqa: E402
+
+# The sweep: 300 ms to 2.5 s. Below 300 ms a normal breath ends the turn; above 2.5 s is
+# the backstop replacement we are trying to come down from.
+CANDIDATES = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5]
+
+# Two turns closer together than this, the second one continuing the first, is what a
+# hangover that fired too early looks like from the transcript. V10 uses the same signal
+# ("he carried on speaking within two seconds") to score its own judges.
+GAP_SECONDS = 2.0
+
+
+def transcript_index(path: Path) -> dict:
+    """`pcm` file name to the line that wrote it. The measurement's only use for text."""
+    index: dict = {}
+    if not path.is_file():
+        return index
+    for raw in path.read_text(errors="replace").splitlines():
+        try:
+            line = json.loads(raw)
+        except ValueError:
+            continue
+        name = str(line.get("pcm") or "")
+        if name:
+            index.setdefault(name, line)
+    return index
+
+
+def frames(path: Path, detector) -> tuple[list[bool], float]:
+    """Every 32 ms window of a recording, as speech or not, plus its length in seconds.
+
+    THE WHOLE FILE AT ONCE, unlike the socket, which sees it in whatever chunks a
+    browser's worklet produced. The Endpointer takes the frame length as an argument for
+    exactly this reason: chunking changes the arithmetic's granularity and nothing else.
+    """
+    with wave.open(str(path), "rb") as fh:
+        if fh.getsampwidth() != 2 or fh.getnchannels() != 1:
+            raise ValueError("not 16 bit mono")
+        rate = fh.getframerate()
+        pcm = fh.readframes(fh.getnframes())
+    width = config.VAD_WINDOW * 2
+    detector.reset()
+    flags = [detector.is_speech(pcm[i:i + width]) for i in range(0, len(pcm) - width + 1, width)]
+    return flags, len(pcm) / 2 / rate
+
+
+def fire_at(flags: list[bool], hangover: float, frame: float) -> float | None:
+    """Where `hangover` would have ended this recording, in seconds, or None."""
+    ep = vadmod.Endpointer(hangover=hangover)
+    for i, speech in enumerate(flags):
+        if ep.feed(speech, frame):
+            return (i + 1) * frame
+    return None
+
+
+def speech_after(flags: list[bool], seconds: float, frame: float) -> bool:
+    """Was he still talking after that point: the definition of a cut mid-sentence."""
+    start = int(seconds / frame)
+    return any(flags[start:])
+
+
+def sweep(records: list[tuple[str, list[bool], float, str]], frame: float) -> None:
+    modes = sorted({mode for _, _, _, mode in records} | {"all"})
+    for mode in modes:
+        rows = [r for r in records if mode == "all" or r[3] == mode]
+        if not rows:
+            continue
+        print(f"\n{mode}: {len(rows)} recordings")
+        print(f"  {'hangover':>9}  {'fired':>6}  {'saved p50':>10}  {'saved p90':>10}  "
+              f"{'cuts mid-sentence':>18}")
+        for cand in CANDIDATES:
+            saved, cuts, fired = [], 0, 0
+            for _, flags, length, _ in rows:
+                at = fire_at(flags, cand, frame)
+                if at is None:
+                    continue
+                fired += 1
+                saved.append(length - at)
+                if speech_after(flags, at, frame):
+                    cuts += 1
+            if not fired:
+                print(f"  {cand:>8.1f}s  {'never':>6}")
+                continue
+            saved.sort()
+            p50 = saved[len(saved) // 2]
+            p90 = saved[min(len(saved) - 1, int(len(saved) * 0.9))]
+            flag = "  <-- cuts him off" if cuts else ""
+            print(f"  {cand:>8.1f}s  {fired:>6}  {p50:>9.2f}s  {p90:>9.2f}s  "
+                  f"{cuts:>10} of {fired:<4}{flag}")
+
+
+def one(records: list[tuple[str, list[bool], float, str]], hangover: float,
+        frame: float) -> None:
+    print(f"\nhangover {hangover}s, per recording")
+    print(f"  {'recording':<20} {'mode':<8} {'length':>8} {'fired at':>9} {'saved':>8}  cut")
+    for name, flags, length, mode in records:
+        at = fire_at(flags, hangover, frame)
+        if at is None:
+            print(f"  {name:<20} {mode:<8} {length:>7.2f}s {'never':>9} {'':>8}")
+            continue
+        cut = "MID-SENTENCE" if speech_after(flags, at, frame) else ""
+        print(f"  {name:<20} {mode:<8} {length:>7.2f}s {at:>8.2f}s {length - at:>7.2f}s  {cut}")
+
+
+def wav_pcm(path: Path) -> tuple[bytes, int]:
+    with wave.open(str(path), "rb") as fh:
+        return fh.readframes(fh.getnframes()), fh.getframerate()
+
+
+def two_stage(files: dict, records, frame: float, short: float, long: float) -> None:
+    """The two-stage rule against the two single hangovers it sits between, per mode."""
+    from harbor_voice import speech                             # the model, only here
+    stt = speech.make_stt()
+    if not getattr(stt, "ready", True):
+        print(f"no speech model on this machine: {getattr(stt, 'why', '')}")
+        return
+    results = []
+    for name, flags, length, mode in records:
+        pcm, rate = wav_pcm(files[name])
+
+        def heard(seconds, pcm=pcm, rate=rate):
+            return stt.transcribe(pcm[:int(seconds * rate) * 2], rate)
+        at, stage = vadmod.two_stage_fire_at(flags, frame, heard, short=short, long=long)
+        results.append((name, flags, length, mode, at, stage))
+    modes = sorted({r[3] for r in results} | {"all"})
+    for mode in modes:
+        rows = [r for r in results if mode == "all" or r[3] == mode]
+        if not rows:
+            continue
+        print(f"\n{mode}: {len(rows)} recordings, two-stage {short}s / {long}s")
+        print(f"  {'rule':<14}  {'fired':>6}  {'saved p50':>10}  {'saved p90':>10}  "
+              f"{'cuts mid-sentence':>18}")
+        lines = [("two-stage", [(r[1], r[2], r[4]) for r in rows])]
+        for single in (short, long):
+            lines.append((f"only {single}s", [(r[1], r[2], fire_at(r[1], single, frame))
+                                            for r in rows]))
+        for label, fires in lines:
+            saved = sorted(length - at for _f, length, at in fires if at is not None)
+            cuts = sum(1 for flags, _l, at in fires
+                       if at is not None and speech_after(flags, at, frame))
+            if not saved:
+                print(f"  {label:<14}  {'never':>6}")
+                continue
+            p50 = saved[len(saved) // 2]
+            p90 = saved[min(len(saved) - 1, int(len(saved) * 0.9))]
+            print(f"  {label:<14}  {len(saved):>6}  {p50:>9.2f}s  {p90:>9.2f}s  "
+                  f"{cuts:>10} of {len(saved):<4}")
+        early = sum(1 for r in rows if r[5] == "short")
+        print(f"  ended at the short pause: {early} of {len(rows)}")
+
+
+def gaps(transcript: Path) -> None:
+    """Turns that arrived within two seconds of the one before: a cut that fired early.
+
+    READ FROM THE TRANSCRIPT, NOT THE AUDIO, because this is the one failure the audio
+    cannot show. When the shipped hangover cuts him mid-sentence, the rest of the sentence
+    is in the NEXT recording, so each file on its own looks like a clean ending.
+
+    ONE LINE PER TURN, NOT PER RECORD (lane H, H4). A capture writes `captured` and then
+    `answer`, both carrying his words, a few milliseconds apart; counted as two turns, every
+    capture read as a cut that fired early ("0.0s", the same sentence on both sides), seven
+    of them on the box. The first of a turn's records stands for it.
+    """
+    lines, seen = [], set()
+    for raw in transcript.read_text(errors="replace").splitlines():
+        try:
+            line = json.loads(raw)
+        except ValueError:
+            continue
+        if line.get("kind") not in ("answer", "captured") or not line.get("said"):
+            continue
+        turn = str(line.get("turn") or "")
+        if turn and turn in seen:
+            continue
+        seen.add(turn)
+        lines.append(line)
+    lines.sort(key=lambda d: d.get("at") or 0)
+    print(f"\nturns within {GAP_SECONDS}s of the one before (a hangover that fired early)")
+    found = 0
+    for before, after in zip(lines, lines[1:]):
+        gap = (after.get("at") or 0) - (before.get("at") or 0)
+        if 0 < gap <= GAP_SECONDS:
+            found += 1
+            print(f"  {gap:.1f}s  {str(before.get('said'))[:60]!r}"
+                  f"  ->  {str(after.get('said'))[:60]!r}")
+    if not found:
+        print("  none")
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="measure the end-of-utterance hangover")
+    ap.add_argument("--dir", type=Path, default=None, help="the corpus (default state/voice/pcm)")
+    ap.add_argument("--transcript", type=Path, default=None)
+    ap.add_argument("--hangover", type=float, default=None, help="one candidate, per recording")
+    ap.add_argument("--gaps", action="store_true", help="turns that look like a wrong cut")
+    ap.add_argument("--two-stage", action="store_true",
+                    help="score the two-stage rule (D-6); needs the speech model, reads only")
+    ap.add_argument("--short", type=float, default=vadmod.TWO_STAGE_SHORT)
+    ap.add_argument("--long", type=float, default=vadmod.TWO_STAGE_LONG)
+    args = ap.parse_args(argv)
+
+    pcm_dir = args.dir or config.RECORD_DIR
+    transcript = args.transcript or (config.DATA / "transcript.jsonl")
+    if args.gaps:
+        gaps(transcript)
+        return 0
+
+    files = sorted(pcm_dir.glob("*.wav")) if pcm_dir.is_dir() else []
+    if not files:
+        print(f"no recordings in {pcm_dir}.")
+        print("turn the corpus on with `record = true` under [voice] in the install's config.toml, run "
+              "`keel voice install`, and use voice hands-free for a few days.")
+        return 1
+
+    detector = vadmod.make_vad()
+    if not getattr(detector, "ready", False):
+        print(f"no detector on this machine: {getattr(detector, 'why', '')}")
+        return 1
+
+    index = transcript_index(transcript)
+    frame = config.VAD_WINDOW / config.MIC_RATE
+    records = []
+    for path in files:
+        try:
+            flags, length = frames(path, detector)
+        except (OSError, ValueError, wave.Error) as exc:
+            print(f"  skipped {path.name}: {exc}")
+            continue
+        mode = str((index.get(path.name) or {}).get("mode") or "unknown")
+        records.append((path.name, flags, length, mode))
+    if not records:
+        print("nothing readable in the corpus.")
+        return 1
+
+    print(f"{len(records)} recordings from {pcm_dir}, "
+          f"{sum(r[2] for r in records):.0f}s of audio, "
+          f"detector {detector.name}, shipped hangover {config.VAD_HANGOVER}s")
+    if args.two_stage:
+        two_stage({path.name: path for path in files}, records, frame, args.short, args.long)
+    elif args.hangover is not None:
+        one(records, args.hangover, frame)
+    else:
+        sweep(records, frame)
+        print("\nRecordings made while a detector was live end at the shipped hangover, "
+              "so candidates above it cannot be judged from the audio.")
+        print("Run --gaps for the cuts the shipped hangover itself took wrongly.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

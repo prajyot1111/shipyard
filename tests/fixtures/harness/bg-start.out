@@ -1,0 +1,7 @@
+warning: --bg manages the session id; ignoring --session-id (use --resume <id> to continue an existing session)
+Starting background service…
+backgrounded · 083b13ff · keel-probe
+  claude agents             list sessions
+  claude attach 083b13ff    open in this terminal
+  claude logs 083b13ff      show recent output
+  claude stop 083b13ff      stop this session

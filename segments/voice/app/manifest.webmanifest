@@ -1,0 +1,36 @@
+{
+  "id": "/segments/voice/app/",
+  "name": "Voice",
+  "short_name": "Voice",
+  "description": "Talk to Harbor, or type to it; capture an idea in one hold. Its own app, separate from the deck.",
+  "start_url": "/segments/voice/app/",
+  "scope": "/segments/voice/app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#161412",
+  "theme_color": "#161412",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/voice-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Capture",
+      "short_name": "Capture",
+      "description": "Open straight into a hands-free capture: speak, and it lands in the inbox",
+      "url": "/segments/voice/app/?listen=once&mode=capture",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Start a conversation",
+      "short_name": "Talk",
+      "description": "Open straight into a conversation: the microphone reopens after each answer until you say that is all",
+      "url": "/segments/voice/app/?listen=1",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "scene": "6. While it builds: his line 2, Harbor draws a card's journey on the board, then its six steps are walked",
+  "seed": "live: the export card building",
+  "start": "/segments/voice/app/",
+  "mic": "line-2.wav",
+  "harbor": [
+    "Harbor, how does a card go from an idea to a merged pull request? Show me on the board."
+  ],
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scale": 2,
+  "hero": "step 3",
+  "names": {
+    "mic": "#mic",
+    "said": ".v-turn.latest .v-said",
+    "answer": ".v-turn.latest .v-answer",
+    "receipt": ".v-turn.latest .v-tboards a, .v-turn.latest .v-tboards button",
+    "board": "#body, main",
+    "next": "button.wcall-next",
+    "callout": ".wcall-next >> xpath=.."
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "#mic",
+      "label": "ready",
+      "pause": 1500
+    },
+    {
+      "do": "hold",
+      "target": "#mic",
+      "ms": 8600,
+      "label": "speak",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "for": "(document.querySelector('.v-turn.latest .v-answer') || {}).textContent?.length > 20",
+      "timeout": 180000,
+      "label": "answered",
+      "pause": 3000
+    },
+    {
+      "do": "wait",
+      "target": "receipt",
+      "timeout": 30000,
+      "label": "drawn",
+      "pause": 2500
+    },
+    {
+      "do": "click",
+      "target": "receipt",
+      "label": "open board",
+      "pause": 4000
+    },
+    {
+      "do": "eval",
+      "js": "location.assign(location.pathname + '?view=walk&full=1')",
+      "label": "walk",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "target": "next",
+      "label": "step 1",
+      "pause": 4000
+    },
+    {
+      "do": "click",
+      "target": "next",
+      "label": "step 2",
+      "pause": 4000
+    },
+    {
+      "do": "click",
+      "target": "next",
+      "label": "step 3",
+      "pause": 4000
+    },
+    {
+      "do": "click",
+      "target": "next",
+      "label": "step 4",
+      "pause": 4000
+    },
+    {
+      "do": "click",
+      "target": "next",
+      "label": "step 5",
+      "pause": 4000
+    },
+    {
+      "do": "click",
+      "target": "next",
+      "label": "step 6",
+      "pause": 4000
+    }
+  ]
+}

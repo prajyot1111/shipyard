@@ -1,0 +1,98 @@
+/* The deck's phone layer for a lavish page: the plan takes the viewport, the conversation
+   is a bar.
+ *
+ * Lavish is vendored upstream and has no collapse of its own. At its own phone breakpoint
+ * it gives the conversation panel `min(42vh, 360px)` of a 844px screen, so the plan he
+ * opened full screen gets a little over half of it, with a "Your agent is not listening"
+ * bubble and a message box under it. Every lavish page he sees goes through the deck's
+ * proxy, so the deck injects this (`keel/lavishlayer.py`).
+ *
+ * NOTHING HERE RENAMES ANYTHING OF LAVISH'S. The selectors are lavish's own
+ * (`keel.lavishlayer.SELECTORS`, held against the vendored bundle by
+ * tests/test_lavishlayer.py), everything this file adds is prefixed `keel-`, and above
+ * 860px, which is lavish's own phone breakpoint, every rule here is inert: the layer does
+ * nothing at all on the desk.
+ *
+ * The variables are lavish's too (`--bg-panel`, `--fg`, `--border-subtle`, `--dur`,
+ * `--ease`, `--bar-h`), so the layer follows lavish's palette rather than carrying a second
+ * one that would drift from it. */
+
+.keel-convbar, .keel-scrim, .keel-resume { display: none; }
+
+@media (max-width: 860px) {
+  /* THE PLAN TAKES THE VIEWPORT. Lavish's phone rule splits `.layout` into two rows, the
+     plan and the panel; the panel comes out of the grid here and the plan keeps the one
+     row that is left. The padding is what stops the collapsed bar clipping the bottom of
+     the plan: `*{box-sizing:border-box}` is lavish's, so the iframe's `height:100%` is
+     100% of the content box. */
+  .layout { grid-template-rows: minmax(0, 1fr); }
+  .frame { padding-bottom: calc(44px + env(safe-area-inset-bottom)); }
+
+  /* THE CONVERSATION IS A SHEET, sitting on the bar and never taller than 60% of the
+     viewport. Closed, it is translated its whole height plus the bar's below the fold
+     rather than hidden, so opening and closing is one movement. */
+  .panel {
+    position: fixed; left: 0; right: 0; width: 100%; z-index: 40;
+    bottom: calc(44px + env(safe-area-inset-bottom));
+    max-height: 60vh;
+    border-top: var(--hairline-subtle);
+    box-shadow: var(--shadow-floating);
+    transform: translateY(calc(100% + 44px + env(safe-area-inset-bottom)));
+    transition: transform var(--dur) var(--ease);
+  }
+  body[data-keel-panel="open"] .panel { transform: translateY(0); }
+  .panel h2 { margin: 12px 16px 8px; }
+  /* WHAT SCROLLS INSIDE THE SHEET IS LAVISH'S OWN, and deliberately not named here: it is
+     `.chat` in lavish 0.1.36 and `.panel-scroll` in 0.1.48. Both are already the flexing,
+     overflowing child of a `.panel` that is a flex column, so bounding the panel's height
+     is the whole of what this layer has to do to make the sheet scroll. Naming one of them
+     would break on the release that renamed it, and naming both would fight the one that
+     is there. */
+
+  /* A tap on the plan closes the sheet. A click inside the artifact's iframe never reaches
+     this document, so the sheet's own scrim is what hears it; it covers the plan ONLY, so
+     the Annotate switch in lavish's top bar is still reachable with the sheet open, and it
+     is absent entirely with the sheet closed, which is what leaves annotation untouched. */
+  body[data-keel-panel="open"] .keel-scrim {
+    display: block; position: fixed; z-index: 30;
+    inset: var(--bar-h) 0 calc(44px + env(safe-area-inset-bottom)) 0;
+    background: rgba(15, 17, 21, 0.45);
+  }
+
+  /* THE BAR. 44px of thumb with the safe area UNDER it, which is what the height and the
+     padding say together: the box is lavish's own border box (`*{box-sizing:border-box}`),
+     so the height has to carry the inset or the 44px would be eaten by it. `left` and
+     `right` size it, never `width:100%`, which with side padding is 32px wider than the
+     viewport. */
+  .keel-convbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    height: calc(44px + env(safe-area-inset-bottom));
+    align-items: center; gap: 8px;
+    padding: 0 16px; padding-bottom: env(safe-area-inset-bottom);
+    margin: 0; border: 0; border-top: var(--hairline-subtle);
+    background: var(--bg-panel); color: var(--fg);
+    font-family: inherit; font-size: 13px; font-weight: var(--w-semi); text-align: left;
+  }
+  .keel-convbar-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .keel-convbar-count[hidden] { display: none; }
+  .keel-convbar-count {
+    flex: 0 0 auto; min-width: 20px; height: 20px; padding: 0 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-pill); background: var(--bg-elevated);
+    color: var(--fg-muted); font-family: var(--font-mono); font-size: 11px;
+  }
+  .keel-convbar[data-keel-away="yes"] .keel-convbar-label { color: var(--fg-muted); }
+  .keel-convbar-chev { flex: 0 0 auto; display: inline-flex; color: var(--fg-muted);
+    transition: transform var(--dur) var(--ease); }
+  body[data-keel-panel="open"] .keel-convbar-chev { transform: rotate(180deg); }
+
+  /* NOT LISTENING: there is nothing a message can reach, so the sheet says the one thing
+     that does resume the house instead of offering a box that sends into silence. Lavish's
+     own banner above it is left exactly as it is. */
+  body[data-keel-listening="no"] #chatInput,
+  body[data-keel-listening="no"] #sendActions { display: none; }
+  body[data-keel-listening="no"] .keel-resume {
+    display: block; margin: 0; color: var(--fg-muted);
+    font-size: 12px; line-height: 1.4;
+  }
+}

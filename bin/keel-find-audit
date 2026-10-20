@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""keel-find-audit: the find bar measured in a real browser, on the deck's real pages.
+
+    bin/keel-find-audit [--shots DIR] [--browser PATH] [--keep]
+
+It serves the deck IN THIS PROCESS against a scratch board of its own (a temporary
+directory: its own config values, board, boards and a `claude` that lists nothing, so
+nothing here touches the live board, the live deck or a real session), seeds it with cards
+and boards whose words are long enough to break a careless control, and asks the browser
+tool (`eval`) to open every surface of the find bar on Cards, the board list and Reviews (its
+list and its kanban) at 390x844, 900x800 and 1440x900, with filters applied from the URL.
+What it asks is
+`tests/fixtures/find-measure.js`: no control's text clipped or overflowing, no box
+reaching past its control, no page wider than the window, the bar's type sizes, weights and
+4px grid, and 44px targets on the phone.
+
+It is not part of `make test`: the suite runs behind a fence that must never start a
+browser (tests/fence.py, tests/test_browser.py). `tests/test_find.py` holds the engine
+and the pages under node; this holds what only a browser can see. Exit 0 when every page
+at every width passes, 1 otherwise, with each failure named.
+
+`--shots DIR` also writes a screenshot of each page at each width, once with the Filter
+panel or sheet open and once with the tokens and the list.
+"""
+
+import argparse
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+import urllib.parse
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from keel import boards, boardtrash, serve      # noqa: E402
+from keel.board import Board                     # noqa: E402
+from keel.config import Config, Space            # noqa: E402
+
+SIZES = [(390, 844), (900, 800), (1440, 900)]
+MEASURE = ROOT / "tests" / "fixtures" / "find-measure.js"
+# Filters applied from the URL, so every page is measured with tokens on the line.
+PAGES = {
+    "cards": ("/", {"view": "cards", "space": "personal", "sort": "updated",
+                    "f": 'stage:review,building,planning repo:keel topic:"a long topic name for wrapping"',
+                    "inc": "done,archived"}),
+    "boards": ("/board", {"space": "personal", "sort": "activity",
+                          "f": "source:house updated:month", "inc": "deleted,allspaces"}),
+    # lane FC: a review card's boards come back with Include review boards (hidden by default)
+    "boards-review": ("/board", {"space": "work", "sort": "activity", "inc": "review,allspaces"}),
+    "reviews": ("/", {"view": "reviews", "space": "work", "sort": "raised",
+                      "f": 'author:"A. Mehta","Someone With A Very Long Display Name" state:detected,inbox,posted commits:new',
+                      "inc": "backlog,dismissed"}),
+    # the Reviews kanban (2026-09-24): every lane, the included ones too
+    "reviews-kanban": ("/", {"view": "reviews", "space": "work", "sort": "raised", "layout": "kanban",
+                             "inc": "backlog,closed,dismissed"}),
+}
+LONG = "Narrated walks through the backup key rotation, with every step spoken twice over"
+
+
+def browser_path(given: str | None) -> str:
+    """The browser tool: the one given, else Harbor's (the only one on this machine), else
+    this repo's own copy of it."""
+    for path in (given, os.path.expanduser("~/harbor/bin/harbor-browser"), str(ROOT / "bin" / "keel-browser")):
+        if path and Path(path).exists():
+            return path
+    raise SystemExit("keel-find-audit: no browser tool (give --browser)")
+
+
+def scratch_config(directory: Path) -> Config:
+    """A config whose every path is under `directory`; the personal space only has repos."""
+    repos = {name: directory / "repos" / name for name in ("keel", "garden")}
+    work_repos = {name: directory / "repos" / name for name in ("api", "web")}
+    for path in list(repos.values()) + list(work_repos.values()):
+        path.mkdir(parents=True, exist_ok=True)
+    # an adapter directory with nothing in it: enough for the deck to draw the Reviews route
+    (directory / "adapters" / "work").mkdir(parents=True, exist_ok=True)
+    spaces = {
+        "personal": Space(name="personal", config_dir=directory / "cfg-personal", repos=repos,
+                          contract=ROOT / "etc" / "space-personal.md", adapter=None, deny=[]),
+        "work": Space(name="work", config_dir=directory / "cfg-work", repos=work_repos,
+                      contract=ROOT / "etc" / "space-work.md", adapter="work",
+                      adapter_dir=directory / "adapters" / "work", deny=[]),
+    }
+    config = Config(root=ROOT, state_dir=directory / "state", houses_max=3, reviews_max=2,
+                    poll_seconds=30, drain_paused=True, segments_dir=directory / "segments",
+                    adapters_dir=directory / "adapters", serve_port=0, lavish_port=1,
+                    spaces=spaces, home=directory / "home")
+    config.ensure_dirs()
+    return config
+
+
+def seed_cards(config: Config) -> list[str]:
+    board = Board(config.db_path)
+    try:
+        made = []
+        plan = [("inbox", "keel", "home"), ("assigned", "keel", "voice"), ("planning", "garden", "home"),
+                ("building", "keel", "a long topic name for wrapping"), ("building", "keel", "voice"),
+                ("review", "keel", "a long topic name for wrapping"), ("review", "garden", "home"),
+                ("inbox", None, "errands"), ("building", "keel", "voice"), ("assigned", "garden", "home")]
+        for i, (stage, repo, topic) in enumerate(plan):
+            title = LONG if i % 3 == 0 else f"Rotate the backup key, part {i}"
+            made.append(board.create("personal", title, brief="scratch card for the find audit",
+                                     repo=repo, topic=topic, stage=stage, actor="human"))
+        board.block(made[4], "which key does the drain hold, the old one or the new one?", "house")
+        board.create("personal", "An old finished card", repo="keel", topic="home", stage="done", actor="human")
+        board.create("personal", "Filed away for good", repo="keel", topic="home", stage="review",
+                     options={"archived": True}, actor="human")
+        reviews = seed_reviews(board)
+    finally:
+        board.close()
+    return reviews
+
+
+def seed_reviews(board: Board) -> list[str]:
+    """Review cards in the work space, with invented authors and long titles; their ids."""
+    plan = [("inbox", "api", "A. Mehta", "2026-09-24T08:00:00+00:00", {}),
+            ("review", "web", "R. Iyer", "2026-09-22T08:00:00+00:00", {}),
+            ("done", "api", "A. Mehta", "2026-09-12T08:00:00+00:00",
+             {"review_posted": {"head": "h1", "verdict": "changes", "severity": "high"}, "review_new": {"head": "h2"}}),
+            ("done", "web", "Someone With A Very Long Display Name", "2026-09-20T08:00:00+00:00",
+             {"archived": True}),
+            ("building", "api", "R. Iyer", "2026-09-23T08:00:00+00:00", {}),
+            ("done", "web", "A. Mehta", "2026-09-18T08:00:00+00:00",
+             {"review_posted": {"head": "h1", "verdict": "approve"}, "review_closed": "merged"})]
+    made = []
+    for i, (stage, repo, author, created, extra) in enumerate(plan):
+        options = {"kind": "review", "review_key": f"{repo}:{100 + i}", "slot": "review", "pr": 100 + i,
+                   "review_pr": {"author": author, "created": created, "updated": created, "activity": created}}
+        options.update(extra)
+        made.append(board.create("work", f"Review: {LONG}" if i % 2 else f"Review: tidy the retry loop {i}",
+                                 repo=repo, stage=stage, options=options, actor="human"))
+    return made
+
+
+def seed_boards(config: Config, reviews: list[str] = ()) -> None:
+    boards.push(config, 'board "Backup key rotation, plan"\nnode a box "The drain"', card="c-001",
+                card_title=LONG, actor="house")
+    boards.push(config, 'board "Ridge trail loop, options"\nnode b box "Trail"', talker=True, actor="talker")
+    boards.push(config, f'board "{LONG}"\nnode c box "A node with a long label"', card="c-002",
+                card_title="Narrated walks", actor="house")
+    gone = boards.push(config, 'board "Mudroom retile, options"\nnode d box "Tiles"', card="c-003",
+                       card_title="Mudroom", actor="house", new=True)
+    boardtrash.delete(config, [gone["board"]], {"actor": "human"})
+    for card in reviews[:2]:          # a review card's code path: off the list by default
+        boards.push(config, f'board "Review code path, {LONG}"\nnode r box "The retry loop"', card=card,
+                    card_title="Review", actor="house", new=True)
+
+
+def fake_claude(directory: Path) -> Path:
+    """A `claude` that lists no sessions, first on PATH, so the deck never asks the real one."""
+    bindir = directory / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    tool = bindir / "claude"
+    tool.write_text("#!/bin/sh\necho '[]'\n")
+    tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+    return bindir
+
+
+def url_of(base: str, page: str) -> str:
+    path, query = PAGES[page]
+    return base + path + "?" + urllib.parse.urlencode(query)
+
+
+def evaluate(tool: str, url: str, width: int, height: int) -> dict:
+    script = MEASURE.read_text(encoding="utf-8")
+    result = subprocess.run([tool, "eval", url, script, "--width", str(width), "--height", str(height),
+                             "--settle", "1500", "--timeout", "90"],
+                            capture_output=True, text=True, timeout=150, check=False)
+    lines = [line for line in result.stdout.splitlines() if line.strip().startswith("{")]
+    if result.returncode != 0 or not lines:
+        return {"error": (result.stderr or result.stdout).strip()[-600:]}
+    return json.loads(lines[-1])
+
+
+def failures(got: dict) -> list[str]:
+    if "error" in got:
+        return [got["error"]]
+    out = []
+    phone = got["width"] < 900
+    for r in got["results"]:
+        where = r["name"]
+        out += [f"{where}: overflow {x}" for x in r["overflow"]]
+        out += [f"{where}: clipped {x}" for x in r["clipped"]]
+        out += [f"{where}: under 44px {x}" for x in r["small"]] if phone else []
+        if r["doc"] > 0:
+            out.append(f"{where}: the page is {r['doc']}px wider than the window")
+        if r["body"] > 0:
+            out.append(f"{where}: #body scrolls {r['body']}px sideways")
+        if len(r["sizes"]) > 4:
+            out.append(f"{where}: {len(r['sizes'])} type sizes {r['sizes']}")
+        if len(r["weights"]) > 2:
+            out.append(f"{where}: {len(r['weights'])} weights {r['weights']}")
+        out += [f"{where}: off the 4px grid {x}" for x in r["offGrid"]]
+        if not r["controls"]:
+            out.append(f"{where}: measured no controls at all")
+    return out
+
+
+def click_filter(page: str) -> str:
+    """A wait-for expression that opens the Filter panel once, then says when it is up."""
+    btn = f"document.getElementById('find-{page}-filter-btn')"
+    return (f"(window.__opened || ({btn} && ({btn}.click(), window.__opened = true))) && "
+            "!!document.querySelector('.find-panel, .find-sheet')")
+
+
+def shoot(tool: str, url: str, out: Path, width: int, height: int, wait: str) -> None:
+    subprocess.run([tool, "shot", url, str(out), "--width", str(width), "--height", str(height),
+                    "--settle", "1200", "--timeout", "90", "--wait-for", wait],
+                   capture_output=True, text=True, timeout=150, check=False)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--shots", help="write screenshots into this directory")
+    parser.add_argument("--browser", help="the browser tool (default: Harbor's)")
+    parser.add_argument("--keep", action="store_true", help="keep the scratch directory")
+    args = parser.parse_args(argv)
+    tool = browser_path(args.browser)
+    directory = Path(tempfile.mkdtemp(prefix="keel-find-audit-"))
+    os.environ["PATH"] = str(fake_claude(directory)) + os.pathsep + os.environ.get("PATH", "")
+    config = scratch_config(directory)
+    reviews = seed_cards(config)
+    seed_boards(config, reviews)
+    server = serve.make_server(config, port=0)
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    bad = 0
+    try:
+        for page in PAGES:
+            for width, height in SIZES:
+                got = evaluate(tool, url_of(base, page), width, height)
+                wrong = failures(got)
+                names = [r["name"] for r in got.get("results", [])]
+                print(f"{page} {width}x{height}: {'ok' if not wrong else 'FAIL'} ({', '.join(names)})")
+                for line in wrong:
+                    print("   ", line)
+                bad += bool(wrong)
+                if args.shots:
+                    shots = Path(args.shots)
+                    shots.mkdir(parents=True, exist_ok=True)
+                    shoot(tool, url_of(base, page), shots / f"{page}-{width}-panel.png", width, height,
+                          click_filter(page))
+                    shoot(tool, url_of(base, page), shots / f"{page}-{width}-tokens.png", width, height,
+                          "!!document.querySelector('.find-token')")
+    finally:
+        server.shutdown()
+        server.server_close()
+        if not args.keep:
+            shutil.rmtree(directory, ignore_errors=True)
+    print("keel-find-audit:", "every page passes" if not bad else f"{bad} page(s) failed")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

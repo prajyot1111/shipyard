@@ -1,0 +1,14 @@
+{
+ "type": "result",
+ "subtype": "success",
+ "is_error": false,
+ "result": "{\"title\":null,\"repo\":null,\"line\":\"Need more details about the \\\"fix the export\\\" card (repo, symptoms, ticket link) before I can write an accurate reply.\"}",
+ "structured_output": {
+  "title": null,
+  "repo": null,
+  "line": "Need more details about the \"fix the export\" card (repo, symptoms, ticket link) before I can write an accurate reply."
+ },
+ "num_turns": 2,
+ "stop_reason": "tool_use",
+ "session_id": "00000000-0000-0000-0000-000000000000"
+}

@@ -1,0 +1,421 @@
+/* The plan page (app/ui.plan.js, app/ui.planblocks.js): a house's plan drawn in the deck's
+ * own system. Every colour is a token from app/ui.css, so the plan wears the space's palette
+ * with nothing to choose (T1). The same budgets as the deck: four sizes (15/13/11/10), two
+ * weights (400/600), every spacing a multiple of 4, 44px under a thumb on the phone.
+ *
+ * Phone first. At 390px the page is one column and the PAGE scrolls (no scroller inside a
+ * scroller): a wide table or a wide diagram scrolls sideways inside its own box, never the
+ * page. At 900px and up the document and the round sit side by side, the round sticky. */
+
+/* ---------- the page itself (P2-5): no deck around it, and the DOCUMENT scrolls ----------
+   The deck's body is a 100dvh flex box whose #body scrolls inside it; a page of its own
+   gives the scroll back to the document, so there is one scroll axis and no panel whose
+   fill stops at the first viewport (P2-3). */
+body.planpage{height:auto;min-height:100dvh;display:block;overflow:visible;overflow-x:hidden}
+.planpage-body{padding:16px 16px calc(32px + env(safe-area-inset-bottom));margin:0 auto}
+.planroute{display:block;background:none;border:0}
+.plan-body{display:flex;flex-direction:column;gap:16px;min-width:0}
+.phead{display:flex;flex-direction:column;gap:8px}
+.phead-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pback,.pother{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid var(--hair-hi);
+  font-family:var(--mono);font-size:13px;color:var(--ink);text-decoration:none;background:var(--s2)}
+.pback:hover,.pother:hover{background:var(--s3);text-decoration:none}
+.pdocword{color:var(--ink-2)}
+/* the viewer's tabs (c-644): one row of the card's pages; it scrolls sideways on a phone */
+.ptabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--hair);margin:0 -2px}
+.ptabs::-webkit-scrollbar{display:none}
+.ptab{flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;font-size:13px;color:var(--ink-2);
+  text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.ptab:hover{color:var(--ink);text-decoration:none}
+.ptab.on{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+/* the card's files (c-719): one row per markdown file, each a page of the viewer */
+.pfilename{color:var(--ink-2);min-width:0;max-width:100%}
+.pfiles{list-style:none;margin:0;padding:0;border:1px solid var(--hair);background:var(--s2)}
+.pfiles li+li{border-top:1px solid var(--hair)}
+.pfile{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-height:44px;padding:10px 12px;color:var(--ink);text-decoration:none}
+.pfile:hover{background:var(--s3);text-decoration:none}
+.pfile-name{font-size:13px;overflow-wrap:anywhere;min-width:0}
+/* the flow's moves on the page (c-644), each group named */
+.pflows{display:flex;flex-wrap:wrap;gap:8px 16px}
+.pflow{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pflow>.label{color:var(--ink-3)}
+.ptitle{font-size:15px;font-weight:600;letter-spacing:-.02em;line-height:1.4;color:var(--ink)}
+.pmeta{display:flex;flex-wrap:wrap;gap:8px}
+.pmeta .chip{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.space-personal,.chip.space-work{font-family:var(--mono);font-size:11px}
+.chip.tone-good{border-color:var(--good);color:var(--good);background:var(--good-soft)}
+.chip.tone-bad{border-color:var(--crit);color:var(--crit);background:var(--crit-soft)}
+.chip.tone-warn{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+.chip.tone-ok{border-color:var(--good);color:var(--good);background:var(--good-soft)}
+.chip.tone-accent{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.chip.contract{cursor:pointer;font-size:11px}
+.chip{display:inline-flex;align-items:center}
+
+.pseg{display:flex;border:1px solid var(--hair-hi);background:var(--s2)}
+.pseg button{padding:0 12px;height:28px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.pseg button.on{background:var(--s3);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.pseg.wide{width:100%}.pseg.wide button{flex:1}
+
+/* the lede: what he is being asked, first */
+.psummary{border:1px solid var(--hair-hi);background:var(--s2);padding:12px;display:flex;flex-direction:column;gap:8px}
+.plede{font-size:15px;line-height:1.5;color:var(--ink)}
+.pasks{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--ink-2)}
+.pask strong{color:var(--ink);font-weight:600}
+.pask.mine strong{color:var(--accent-ink)}
+
+/* the document */
+.pdoc{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pblock{position:relative;min-width:0;padding:4px 8px;margin:0 -8px;border-left:2px solid transparent;overflow-wrap:anywhere}
+/* THE NOTE BUTTON every block carries (P2-6): in the margin beside the block. On the desk
+   it shows when the pointer is on the block, or when the block already holds a note; on
+   the phone it is always there, quiet, in a 32px strip the block leaves for it, with a
+   44px target. */
+.pnote-add{position:absolute;top:0;right:-44px;width:40px;height:32px;display:flex;align-items:center;justify-content:center;gap:4px;
+  border:1px solid var(--hair-hi);background:var(--s2);color:var(--ink-2);font-size:11px;font-weight:600;opacity:0;z-index:2}
+.pnote-plus{font-size:13px;line-height:1}
+.pnote-add .pnote-word{display:none}
+.pnote-add.has{opacity:1;border-color:var(--accent);color:var(--accent-ink)}
+.pnote-add.has .pnote-word{display:inline}
+.pblock:hover>.pnote-add,.pnote-add:focus-visible{opacity:1}
+.pnote-add:hover{color:var(--ink);border-color:var(--accent)}
+.phint{display:flex;align-items:center;gap:12px;padding:8px 12px;border:1px dashed var(--hair-hi);color:var(--ink-2);font-size:13px}
+.phint span{flex:1;min-width:0}
+.pselpop{position:fixed;z-index:30;display:flex;gap:8px}
+.pselpop .btn{min-height:44px;padding:0 16px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+/* a question he asked, and the house's answer pinned under it (P2-9) */
+.pask-q{border:1px solid var(--t-plan);border-left-width:4px;background:var(--s2);padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.pask-reply{display:flex;gap:8px;align-items:baseline;font-size:13px;border-top:1px solid var(--hair);padding-top:4px}
+.pask-reply .k{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--good);flex:0 0 auto}
+.pask-answer{white-space:pre-wrap}
+.pblock.sel{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.pblock.pb-h{padding-top:12px}
+.ph2{font-size:15px;font-weight:600;color:var(--ink);padding-bottom:4px;border-bottom:1px solid var(--hair)}
+.ph3{font-size:13px;font-weight:600;color:var(--ink)}
+.pblock p{margin:0;line-height:1.55}
+.pblock code,.pref.mono{font-family:var(--mono);font-size:11px;background:var(--s3);padding:0 4px}
+.pref{font-family:var(--mono);font-size:11px;border-bottom:1px dotted var(--ink-3);overflow-wrap:anywhere;word-break:break-all}
+.pref.card{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.pref.broken{color:var(--crit);border-bottom:1px solid var(--crit)}
+.unserved{color:var(--ink-2);border-bottom:1px dotted var(--ink-3)}
+.plist{padding-left:20px;list-style:disc;display:flex;flex-direction:column;gap:4px}
+.plist.ordered{list-style:decimal}
+.plist.sub{margin-top:4px;list-style:circle}
+.plist .lead{font-weight:600}
+.pcheck{display:flex;flex-direction:column;gap:4px}
+.pcheck li{display:flex;gap:8px;align-items:flex-start}
+.pcheck .box{flex:0 0 16px;height:16px;border:1px solid var(--hair-hi);margin-top:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--good)}
+.pcheck li.done{color:var(--ink-2)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.ptablewrap{overflow-x:auto;max-width:100%;border:1px solid var(--hair)}
+.ptable{border-collapse:collapse;width:100%;font-size:13px}
+.ptable th{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);text-align:left;background:var(--s2)}
+.ptable th,.ptable td{padding:8px;border-bottom:1px solid var(--hair);vertical-align:top;min-width:96px}
+.ptable tr:last-child td{border-bottom:0}
+
+.pcallout{border:1px solid var(--hair-hi);border-left:4px solid var(--ink-3);background:var(--s2);padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.pcallout.tone-info{border-left-color:var(--t-plan)}
+.pcallout.tone-warn{border-left-color:var(--warn)}
+.pcallout.tone-error{border-left-color:var(--crit)}
+.pcallout.tone-success{border-left-color:var(--good)}
+.pcallout.tone-settled{border-left-color:var(--accent);background:var(--accent-soft)}
+.pc-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pc-tone{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.pc-title{font-weight:600}
+.pquote{border-left:2px solid var(--hair-hi);padding-left:12px;color:var(--ink-2)}
+
+.pcode{border:1px solid var(--hair);background:var(--s2);min-width:0}
+.pcode-head{display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid var(--hair);min-width:0}
+.pcode-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.pcode-path.broken{color:var(--crit)}
+.pcode-why{padding:8px;border-bottom:1px solid var(--hair);color:var(--ink-2)}
+.pcode-pre{margin:0;padding:8px;overflow-x:auto;font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--ink)}
+.pcode-pre.wrap{white-space:pre-wrap;overflow-wrap:anywhere}
+.pcode-pre code{background:none;padding:0}
+.pcode .cl{white-space:pre;padding:0 4px;margin:0 -4px}
+/* SYNTAX COLOUR (lane FC, FC-3): six colours, each a token of the deck, so both space
+   palettes carry them; each reads at 4.5:1 or better on the code background, on both diff
+   tints and on a finding's marked line (tests/test_planfinding_render.py). */
+.hl-kw{color:var(--t-plan)}
+.hl-str{color:var(--good)}
+.hl-com{color:var(--ink-2);font-style:italic}
+.hl-num{color:var(--warn)}
+.hl-fn{color:var(--accent-ink)}
+.hl-attr{color:var(--t-output)}
+/* a diff's tints sit UNDER the colours: the line says added or removed, the marker keeps the tone */
+.pcode .cl.add{background:color-mix(in srgb,var(--good) 14%,var(--s2))}
+.pcode .cl.del{background:color-mix(in srgb,var(--crit) 14%,var(--s2))}
+.pcode .cl.add .dm{color:var(--good)}
+.pcode .cl.del .dm{color:var(--crit)}
+.pcode .cl.hunk{color:var(--t-plan)}
+.pcode .dm{display:inline-block;width:12px}
+.pcode .ln{display:inline-block;min-width:32px;padding-right:8px;text-align:right;color:var(--ink-2);user-select:none}
+/* a finding's own lines: a bar in the accent and a faint tint, the colours kept on top */
+.pcode .cl.hit{background:color-mix(in srgb,var(--accent) 12%,var(--s2));box-shadow:inset 2px 0 0 var(--accent)}
+.pcode .cl.hit .ln{color:var(--accent-ink)}
+
+/* ---------- a review finding, one card (lane FC, FC-2) ---------- */
+.pfinding{border:1px solid var(--hair-hi);border-left:4px solid var(--ink-3);background:var(--s1);display:flex;flex-direction:column;min-width:0}
+.pfinding.sev-critical,.pfinding.sev-high{border-left-color:var(--crit)}
+.pfinding.sev-medium{border-left-color:var(--warn)}
+.pfinding.sev-low{border-left-color:var(--t-plan)}
+.pfinding.changed{border-color:var(--accent)}
+.pf-head{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-bottom:1px solid var(--hair)}
+.pfinding.folded .pf-head{border-bottom:0}
+.pf-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.pf-sev{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase}
+.pf-sev.sev-critical,.pf-sev.sev-high{border-color:var(--crit);color:var(--crit);background:var(--crit-soft)}
+.pf-sev.sev-medium{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+.pf-sev.sev-low{border-color:var(--t-plan);color:var(--t-plan);background:var(--s2)}
+.pf-member{font-size:11px}
+.pf-at{font-size:11px;color:var(--accent-ink);overflow-wrap:anywhere;min-width:0}
+.pf-claim{font-size:13px;font-weight:600;line-height:1.4;color:var(--ink)}
+.pf-folded{padding:0 12px 8px}
+.pf-body{display:flex;flex-direction:column;gap:12px;padding:12px;min-width:0}
+.pf-left,.pf-right{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pf-code{min-width:0}
+.pf-code .pcode-pre{max-width:100%}
+.pf-code.none .pcode-why{border-bottom:0}
+.pf-why{display:flex;flex-direction:column;gap:4px;color:var(--ink-2);font-size:13px}
+.pf-why .k,.pf-because .k{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.pf-verdict.v-disputed{color:var(--warn)}
+.pf-whyfold summary{cursor:pointer;color:var(--ink-2);font-size:13px}
+.pf-comment{display:flex;flex-direction:column;gap:8px}
+.pf-comment textarea{font-size:13px;min-height:88px;width:100%}
+.pf-comment.dropped textarea{opacity:.6}
+.pf-choice{display:flex;flex-direction:column;gap:8px}
+.pf-choice .pb-choice{flex:1 1 0}
+.pf-status{flex:1 1 160px;min-width:0}
+.pf-cols .pf-body{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
+
+.pimages.gallery{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
+.pfig{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0}
+.pfig img{display:block;max-width:100%;height:auto;border:1px solid var(--hair-hi);background:var(--s2)}
+.pfig.frame-phone{max-width:240px}
+.pfig.frame-phone img{border-radius:12px}
+.pimages.gallery .pfig{flex:0 0 auto;max-width:80%}
+.pimages.gallery .pfig.frame-phone{max-width:200px}
+.pfig figcaption{font-size:11px;color:var(--ink-2)}
+
+.pstats{display:grid;grid-template-columns:repeat(auto-fill,minmax(144px,1fr));gap:8px}
+.pstat{border:1px solid var(--hair);background:var(--s2);padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.pstat-v{font-size:15px;font-weight:600;font-family:var(--mono)}
+.pstat.tone-good .pstat-v{color:var(--good)}.pstat.tone-warn .pstat-v{color:var(--warn)}
+.pstat.tone-bad .pstat-v{color:var(--crit)}.pstat.tone-accent .pstat-v{color:var(--accent-ink)}
+
+.psteps{display:flex;flex-direction:column;gap:8px}
+.psteps li{display:flex;gap:12px;align-items:flex-start}
+.psteps .n{flex:0 0 24px;height:24px;border:1px solid var(--hair-hi);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink-2)}
+.psteps li.st-done .n{border-color:var(--good);color:var(--good)}
+.psteps li.st-doing .n{border-color:var(--accent);color:var(--accent-ink)}
+.psteps li.st-blocked .n{border-color:var(--crit);color:var(--crit)}
+.pst-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pst-title{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:600}
+.chip.st{height:20px;font-size:10px;font-family:var(--mono);font-weight:400}
+.chip.st-done{color:var(--good);border-color:var(--good)}.chip.st-doing{color:var(--accent-ink);border-color:var(--accent)}
+.chip.st-blocked{color:var(--crit);border-color:var(--crit)}
+
+/* current against target: the same system on both sides, rows paired */
+.pcompare{border:1px solid var(--hair);display:flex;flex-direction:column}
+.pcmp-title{padding:8px 12px;font-weight:600;border-bottom:1px solid var(--hair)}
+.pcmp-head{display:none}
+.pcmp-row{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-bottom:1px solid var(--hair)}
+.pcmp-row:last-child{border-bottom:0}
+.pcmp-aspect{font-weight:600}
+.pcmp-cell{display:flex;gap:8px;align-items:baseline;min-width:0}
+.pcmp-cell .side{flex:0 0 72px}
+.pcmp-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.pcmp-text code{word-break:break-all}
+.pcmp-cell.right{color:var(--accent-ink)}
+.pcmp-row.img .pcmp-cell{flex-direction:column}
+.pcmp-row.img img{max-width:100%;border:1px solid var(--hair-hi)}
+
+.poptions{display:flex;flex-direction:column;gap:8px}
+.popt{border:1px solid var(--hair-hi);padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.popt.rec{border-color:var(--accent)}
+.popt-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.popt-label{font-weight:600}
+.pprocon{display:flex;flex-direction:column;gap:4px}
+.pprocon .pro::before{content:'+ ';color:var(--good);font-family:var(--mono)}
+.pprocon .con::before{content:'\2212  ';color:var(--crit);font-family:var(--mono)}
+
+.pdia{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pdia-title{display:flex;align-items:center;gap:8px;font-weight:600;flex-wrap:wrap}
+.pdia-name{min-width:0;overflow-wrap:anywhere}
+.pdia-carried{margin-left:8px;height:22px;padding:0 8px;font-weight:400;background:var(--warn-soft);border-color:var(--warn);color:var(--ink)}
+/* THE DIAGRAM FITS THE COLUMN (P2-1): drawn at the column's width, never above natural size
+   and never under a 10px label; past that floor it scrolls sideways in its own frame, the
+   side there is more of fades, and a line under it says so. A tap opens it full screen. */
+.pdiagram{border:1px solid var(--hair);background:var(--s1);min-height:120px;overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;cursor:zoom-in;padding:8px 0}
+.pdiagram .pdgraph{width:auto;height:auto;display:block;margin:0 auto}
+.pdiagram.wide .pdgraph{margin:0}
+.pdiagram[data-more="x"]{-webkit-mask-image:var(--fade-end);mask-image:var(--fade-end)}
+.pdiagram .gnode{cursor:inherit}
+.pdia-cue{display:none}
+.pdiagram.wide+.pdia-cue{display:block}
+.pdia-src{align-self:flex-end}
+/* the plan's look on the board's own drawing (app/ui.planlook.js) */
+.look-plan .gnode text.lbl,.pfull .gnode text.lbl{font-size:13px}
+.look-plan .gnode text.sub,.pfull .gnode text.sub{font-size:11px}
+.look-plan .gedge text.elabel,.pfull .gedge text.elabel{font-size:11px}
+/* an embedded board's walk: its steps, notes and tables, under the drawing (P2-2) */
+.pwalk{border:1px solid var(--hair)}
+.pwalk summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 12px;min-height:44px;cursor:pointer;font-weight:600}
+.pwalk-body{padding:8px 12px;border-top:1px solid var(--hair)}
+.pwalk-go{display:flex;align-items:center;min-height:44px;padding:0 12px;border-top:1px solid var(--hair);color:var(--accent-ink)}
+.pwalk-body .boutline{max-width:none;padding:0}
+/* full screen, for a diagram with no board of its own: the board's own stage */
+.pfull{position:fixed;inset:0;z-index:40;background:var(--canvas);display:flex;flex-direction:column}
+.pfull-head{display:flex;align-items:center;gap:8px;padding:8px 16px;padding-top:max(8px,env(safe-area-inset-top));border-bottom:1px solid var(--hair);min-height:56px}
+.pfull-title{font-weight:600;min-width:0}
+.pfull-stage{flex:1;min-height:0;position:relative;padding-bottom:env(safe-area-inset-bottom)}
+html.pdia-full,html.pdia-full body{overflow:hidden}
+.pdetails{border:1px solid var(--hair)}
+.pdetails summary{padding:8px 12px;cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+.pdetails-body{padding:8px 12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--hair)}
+
+/* ---------- the answerable blocks ---------- */
+.pblock.answerable{background:var(--s2);border:1px solid var(--hair-hi);border-left:4px solid var(--accent);padding:12px;margin:0}
+.pdecision{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:8px}
+.pd-q{font-size:15px;font-weight:600;line-height:1.4;padding:0;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pd-id{font-weight:400}
+.pd-why{font-size:13px}
+.pd-opts{display:flex;flex-direction:column;gap:8px}
+.pd-opt{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--hair-hi);background:var(--s1);min-height:44px;width:100%;text-align:left}
+.pd-opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.pd-opt:disabled{opacity:.7;cursor:default}
+.pd-dot{flex:0 0 16px;height:16px;border-radius:16px;border:2px solid var(--hair-hi);margin-top:4px}
+.pd-opt.on .pd-dot{border-color:var(--accent);background:radial-gradient(var(--accent) 45%,transparent 50%)}
+.pd-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pd-label{font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pd-gets,.pd-cost{font-size:13px;display:flex;gap:8px;align-items:baseline}
+.pd-gets .k,.pd-cost .k,.pd-because .k,.pq-rec .k,.pq-said .k{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;flex:0 0 auto}
+.pd-gets .k{color:var(--good)}.pd-cost .k{color:var(--crit)}
+.pd-because{font-size:13px;color:var(--ink-2)}
+.pd-state{color:var(--ink-3)}
+.pd-state.mine{color:var(--accent-ink)}
+.pd-otherfield{display:flex;flex-direction:column;gap:8px}
+.pd-otherfield textarea{font-size:16px;min-height:88px}
+.row-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+.pbatch{display:flex;flex-direction:column;gap:8px}
+.pb-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pb-rows{display:flex;flex-direction:column}
+.pb-row{display:flex;flex-direction:column;gap:8px;padding:8px 0;border-top:1px solid var(--hair)}
+.pb-row.changed .pb-text{color:var(--accent-ink)}
+.pb-choices{display:flex;gap:4px;flex-wrap:wrap}
+/* RC-3: the field a row at edit carries, always on a line of its own */
+.pb-edit{flex-basis:100%}
+.pb-choice{height:32px;padding:0 12px;border:1px solid var(--hair-hi);background:var(--s1);font-size:13px;font-weight:600;color:var(--ink-2);position:relative}
+.pb-choice.rec::after{content:'';position:absolute;top:4px;right:4px;width:4px;height:4px;border-radius:4px;background:var(--accent)}
+.pb-choice.on{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+
+.pquestions{display:flex;flex-direction:column;gap:12px;padding-left:20px;list-style:decimal}
+.pq{display:flex;flex-direction:column;gap:8px}
+.pq-q{font-weight:600}
+.pq-rec,.pq-said{font-size:13px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pq-rec .k{color:var(--accent-ink)}.pq-said .k{color:var(--good)}
+.pq .btn{align-self:flex-start}
+
+/* ---------- lint findings, notes, the note bar ---------- */
+.pfindings{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:11px}
+.pfindings li{padding:4px 8px;border-left:2px solid var(--crit);background:var(--crit-soft);color:var(--ink)}
+.pfindings li.lvl-warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.pfindings.all{margin:0}
+.pnotes-on{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.pnote{border:1px solid var(--accent);border-left-width:4px;background:var(--accent-soft);padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.pnote-head{display:flex;align-items:center;gap:8px;min-width:0}
+.pnote-at{color:var(--accent-ink);min-width:0;overflow-wrap:anywhere}
+.pnote-quote{font-size:11px;color:var(--ink-2);font-style:italic;margin:0}
+.pnote-text{font-size:13px;white-space:pre-wrap}
+.btn.ghost{background:transparent;border-color:var(--hair-hi);color:var(--ink-2)}
+.pnotes{display:flex;flex-direction:column;gap:8px}
+.pnote-row{display:flex;flex-direction:column;gap:4px}
+
+/* ---------- the round and Send ---------- */
+.psend{border:1px solid var(--hair-hi);background:var(--s2);padding:12px;display:flex;flex-direction:column;gap:8px}
+.psend.done{border:0;background:none;padding:0}
+.psend-count{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.pcount strong{color:var(--ink);font-weight:600}
+.pcount.mine strong{color:var(--accent-ink)}
+.psend-row{display:flex;gap:8px}
+.psend-row .btn{flex:1}
+.btn.wide{width:100%}
+.btn.off{opacity:.5}
+.psent summary{cursor:pointer}
+
+/* ---------- phone ---------- */
+@media(max-width:899px){
+  .planpage-body{padding:12px 16px calc(32px + env(safe-area-inset-bottom))}
+  .pblock{padding-right:32px}
+  .pblock.answerable{padding-right:36px}
+  .pnote-add{right:-4px;top:-6px;width:36px;height:44px;opacity:.6;border-color:transparent;background:transparent}
+  .pnote-add.has{opacity:1;background:transparent}
+  .pback,.pother{min-height:44px}
+  .ptab{min-height:44px}
+  .planroute .btn{min-height:44px}
+  .planroute .btn.sm{min-height:44px;height:auto;font-size:13px;padding:0 12px}
+  .pseg button{min-height:44px}
+  .pb-choice{min-height:44px;flex:1 1 auto}
+  .psend-row{flex-direction:column-reverse}
+  .pdetails summary{min-height:44px}
+  .pf-whyfold summary{min-height:44px;display:flex;align-items:center}
+  .pf-comment textarea{font-size:16px}
+  .pf-toggle{min-width:64px}
+}
+
+/* ---------- desk: the document and the round side by side ---------- */
+@media(min-width:900px){
+  .planpage-body{padding:24px 24px 48px}
+  /* the whole width (2026-09-25, his call): code, tables, boards and finding cards get the
+     room; running prose alone keeps a reading measure so a line is still easy to follow */
+  .pgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start}
+  .pmain p,.pmain .plist,.pmain .pcallout{max-width:100ch}
+  .pmain{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .pside{position:sticky;top:24px;display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 48px);overflow-y:auto}
+  .pcmp-head{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,2fr) minmax(0,2fr);gap:12px;padding:8px 12px;border-bottom:1px solid var(--hair)}
+  .pcmp-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,2fr) minmax(0,2fr);gap:12px}
+  .pcmp-row.img{grid-template-columns:1fr 1fr}
+  .pcmp-cell .side{display:none}
+  .pb-row{flex-direction:row;align-items:center;flex-wrap:wrap}
+  .pb-text{flex:1;min-width:0}
+  /* a review's outcome is findings of code beside comment: a narrower round column */
+  .planroute[data-kind="review"] .pgrid{grid-template-columns:minmax(0,1fr) 280px}
+}
+
+.planroute strong,.planroute b{font-weight:600}
+.pmeta{align-items:center}
+.pmeta-line{flex:1 1 100%;min-width:0;overflow-wrap:anywhere}
+.pdl{display:flex;flex-direction:column;border:1px solid var(--hair-hi);background:var(--s2);padding:8px 12px;gap:4px}
+.pdl-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:4px 0;color:var(--ink);text-decoration:none}
+.pdl-row:hover{text-decoration:none;background:var(--s3)}
+.pdl-a{color:var(--ink-2)}
+.pdl-row.mine .pdl-a{color:var(--accent-ink)}
+@media(min-width:900px){.pside .psend-row{flex-direction:column}}
+/* A chip that labels (a tone in a table, "recommended", a step's state) is not a control,
+   so the phone's 44px rule for chips (ui.css) does not apply to it; the contract chip IS a
+   control and keeps it. */
+@media(max-width:899px){
+  .planroute .chip:not(.contract){min-height:0;height:24px}
+  .planroute .chip.st{height:20px}
+}
+@media(min-width:900px){.pside .psend-row .btn{flex:none;height:32px}}
+.pask-wait{color:var(--accent-ink)}
+
+/* Many decisions on a phone (P4-4): one 44px row each, opened in place. Two sizes (13 and
+   11), two weights, a 4px grid; the changed marker is the accent, as `.pdl-row.mine` is. */
+.pdoc.compact{gap:8px}
+.pdrow{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;min-height:44px;padding:8px 12px;
+  text-align:left;background:var(--s2);border:1px solid var(--hair-hi);color:var(--ink);font:inherit;cursor:pointer}
+.pdrow.mine{border-color:var(--accent)}
+.pdrow-q{font-size:13px;font-weight:600;line-height:16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pdrow-a{display:flex;gap:8px;align-items:center;min-width:0;font-size:11px;line-height:16px;color:var(--ink-2)}
+.pdrow.mine .pdrow-a{color:var(--accent-ink)}
+.pdrow-mark{flex:none;padding:0 4px;border:1px solid var(--accent);color:var(--accent-ink);font-weight:600}
+.pdrow-n{flex:none;margin-left:auto}
+.pdrow-open{display:flex;flex-direction:column;gap:4px}
+/* an embedded board he deleted (lane BD): one quiet row with Restore, never an error */
+.pdia-deleted{flex-direction:row;align-items:center;gap:12px;padding:12px;border:1px dashed var(--hair-hi);flex-wrap:wrap}
+.pdia-gone{display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0;color:var(--ink-2)}
+.pdia-restore{min-height:44px}

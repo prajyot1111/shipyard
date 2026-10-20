@@ -1,0 +1,47 @@
+# How a card reaches a house, drawn the board way.
+#
+# The worked example for `docs/atlas/45-board.md`: ONE diagram, with the detail hanging on
+# the nodes it is about rather than standing as pictures of its own.
+#
+# Push it as the talker's own board:
+#
+#     keel board push --talker --file tests/fixtures/example.board
+#
+# `tests/test_boards.py` (ExampleBoardTest) parses it, so what the docs show is what draws.
+
+board "How a card reaches a house"
+
+group board "On the board"
+group house "In the house"
+
+node inbox file "inbox" in board "where a card is filed"
+node assigned file "assigned" in board "the user said start"
+node drain bot "the drain" in board "one pass every poll"
+node contract file "house contract" in house "read first"
+node worktree folder "the worktree" in house "the card's own checkout"
+node review file "review" in house "the outcome gate"
+
+edge inbox -> assigned "the user's tap"
+edge assigned -> drain "picked up on the next pass"
+edge drain -> contract "starts a house"
+edge contract -> worktree "builds there"
+edge worktree -> review "stages its outcome"
+
+mark assigned accent
+mark review warn
+
+note board "Two places, and the drain is the only door between them: nothing on the board starts a house by itself, and nothing in a house approves its own gate."
+note review "The outcome gate is the user's tap, never a command the house can run."
+
+step inbox "A card is filed in the inbox"
+step assigned "The user assigns it"
+step drain "The drain starts its house on the next pass"
+step worktree "The house builds in its own worktree"
+step review "It stages the outcome for the user's Approve"
+
+table board "Who moves a card"
+cols Stage | Moved by | How
+row inbox | the user or the talker | kb create
+row assigned | the user | a tap on the deck
+row review | the house | kb stage
+row done | the user | Approve outcome

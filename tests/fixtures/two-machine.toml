@@ -1,0 +1,333 @@
+# A TWO-MACHINE INSTALL'S CONFIG, as the tracked keel.toml read before c-610 S1 (a laptop
+# and a box, the board moved to the box by the cutover), with example hostnames. The
+# two-machine code is frozen until step 8 deletes it; the tests of it read this file.
+[keel]
+state_dir = "~/keel/state"
+houses_max = 3
+reviews_max = 2             # review cards (options.slot = review) run in their own pool
+poll_seconds = 30
+drain_paused = false
+backlog_days = 7            # days at the outcome gate before a card backlogs
+segments_dir = "~/keel/segments"      # the repo's own tree since cutover step 8
+fetch_lock_dir = "~/keel/state/fetch-locks"
+adapters_dir = "~/keel/adapters"
+serve_port = 8790            # the tailnet root points here
+host = "mac"                # the name the deck's drain pill shows for this machine, and the
+                            # [hosts.<name>] table it reads; KEEL_HOST wins (the box sets it)
+# board_url: a machine whose board lives elsewhere says so in its own [hosts.<name>] table
+# (the laptop's, after the move), so this shared file never points the box at itself.
+# KEEL_URL wins over it.
+lavish_port = 4387
+discussion_idle_seconds = 1200   # a plan discussion ends after this long with nothing sent
+voice_hold_seconds = 300         # how long voice holds a card's house after his last sentence
+                                 # (the pin on the voice page expires with it)
+talker_reset_max_age_seconds = 86400  # the talker auto-resets a conversation older than this (about daily)
+merge_queue = true          # true: Approve outcome of a personal card here lands through the
+                            # drain (landing, testing, landed) instead of inside the tap, and
+                            # the drain pre-runs the merged tree at review (keel/landing.py).
+                            # With it off, nothing is queued, a card built on the other machine
+                            # included (its approve is refused by name), and `kb land` refuses.
+rotate = true               # true: the deck's Rotate session and `rotate` relays (keel/rotate.py)
+multi_after = true          # true: a card may wait for several cards (after=a,b). Only after the
+                            # box AND the Mac run code that reads a list (Atlas: cards and gates)
+bosun_builder = true        # true: builder mode, Bosun builds and lands Keel's own fixes on
+                            # personal cards with a repo, its own authority included; next
+                            # and his deploy stay (Atlas: Bosun, "Builder mode"). false puts
+                            # every rule back.
+work_hours = "09:00-19:00"  # when he works, local time: the pull request watcher looks at a
+work_days = "mon-fri"       # shipping card every 5 or 15 minutes inside these, hourly outside
+plan_pages = true           # true: every new plan and outcome is written in the plan format and
+                            # read at /plan/<id> and /outcome/<id> (Atlas: plans on the deck).
+                            # false is the way back: the plan styles (lavish, markdown) as before
+
+# Trees the deck may serve a file from, on top of state/cards and segments_dir, which are
+# always allowed. Cards carry plan and context paths written long before Keel existed, so
+# without these roots the deck has a link it will not open. The credential denylist
+# applies inside every root, and a token is checked again before a byte is served.
+artifact_roots = [
+  "~/harbor/artifacts",     # where the imported cards' plans actually are: 94 of them
+  "~/.claude/plan-archive",
+  "~/.claude/plans",
+  # The two retired PR tools' HISTORY (lane RETIRE, 2026-09-24): nothing reads them any more,
+  # but older cards link into them, so the deck still serves them, read-only.
+  "~/.claude/pr-watch/context",   # PR watch's context notes and their _assets screenshots
+  "~/.claude/pr-reviews",   # the review scanner's findings and orientation documents
+]
+
+# One table per machine: the spaces its drain elects to serve (a space's own `host` pin
+# still bounds it) and its limits. A key left out falls back to [keel], then the default.
+# The box's numbers are <install>/history/docs/vps-plan.md "Limits on the box": 12 GB and two cores.
+[hosts.mac]
+# Lines marked `# cutover:before` hold before the board moves to the box, lines marked
+# `# cutover:after` after it; `bin/keel-cutover` flips them both ways (keel/cutover.py), and
+# a marked line carries no other comment. docs/atlas/80-cutover.md.
+# cutover:before  spaces = ["personal", "work"]
+spaces = ["work"]  # cutover:after
+# houses_max and reviews_max from [keel]: 3 and 2. A personal card still starts here when
+# it is pinned (`options.host = "mac"`) or names a repo only this machine has (keel/where.py).
+# The backup sets this machine writes (bin/keel-backup). harbor and helm live only here;
+# keel and code (the checkout's own history, c-288) move to the box at cutover.
+# cutover:before  backup_sets = ["keel", "code", "harbor", "helm"]
+backup_sets = ["harbor", "helm"]  # cutover:after
+backup_pull = true          # the nightly copy of the whole store into ~/.keel-backup/mirror
+oci_cli = "~/oci-always-free/venv/bin/oci"   # keel doctor reads the boot volume policy
+oci_auth = "profile:DEFAULT"
+oci_facts = "~/oci-always-free"
+# After the move: the board is the box's (this machine's drain, houses and hooks reach it
+# over HTTP), the box's deck reaches this machine's door at `url` (the Mac's own tailnet
+# root, which proxies to its `keel serve`), this machine fetches only the segment that reads
+# its own disk (oci reads ~/oci-always-free), and its drain fast-forwards main from the box.
+board_url = "https://keel.example.ts.net"  # cutover:after
+url = "https://mac.example.ts.net"  # cutover:after
+fetch = ["oci"]  # cutover:after
+code_follow = "box"  # cutover:after
+# The Mac's houses do their heavy work inside Docker (tests, previews, builds), and that pool
+# is gated per preview by `wt-budget` (the work brief tells every house to use it), exactly as
+# in the Helm era, when three houses ran here with no host memory floor. So no floor here: a
+# free-memory floor on macOS mostly stops work houses (2026-09-26, his call, after a 2 GB
+# floor copied from the box proved wrong). What does matter is Docker's size: at 10 GB of the
+# 16 it starved macOS into 6 GB of swap; it is 8 GB now.
+browsers_max = 1            # houses whose card declares options.browser, one at a time
+memory_floor_mb = 0         # no host floor on the Mac: Docker is the houses' budget (wt-budget)
+house_nice = 10             # houses run at nice 10, so his own work is scheduled ahead
+
+[hosts.box]
+spaces = ["personal"]
+# How the desk (the Mac) reaches the box for a Drop in: an ssh destination passed through
+# verbatim, `ssh -t <this> '<command>'` (keel/dropin.py). `keel-box` is a Host block in his
+# ~/.ssh/config (docs/atlas/20-houses.md says what it holds). The Mac names none.
+ssh = "keel-box"
+houses_max = 2
+reviews_max = 1
+browsers_max = 1            # houses whose card declares options.browser, one at a time
+memory_floor_mb = 2048      # start (or resume) nothing under 2 GB available
+house_mb = 700              # what one start is assumed to take within a pass
+house_nice = 10             # houses run at nice 10, so voice is scheduled ahead of them
+# cutover:before  backup_sets = []
+backup_sets = ["keel", "code"]  # cutover:after
+# The personal space's config dir on the box: the box has no ~/harbor. Filled from the
+# personal kit (etc/personal-kit.toml) by keel-bootstrap's space-kit step.
+config_dirs = { personal = "~/keel/spaces/personal/.claude" }
+# The segments the box fetches after the move; the Mac keeps oci (its [hosts.mac] fetch).
+fetch = ["cloud-spend", "daybook", "fathom", "instamart"]  # cutover:after
+oci_cli = "~/.keel-oci/venv/bin/oci"
+oci_auth = "instance_principal"   # read-only: a dynamic group and `read volume-family`
+
+# The cloud tenancy of each host that has one (`keel doctor`'s idle rule, docs/atlas/80-cutover.md).
+# Pay As You Go is not reclaimed for idling, confirmed 2026-09-23, so the rule is informational there.
+[tenancy]
+box = "payg"
+
+# Where the encrypted snapshots go, shared by every machine: an rclone remote (Google Drive,
+# the drive.file scope) or `file:<dir>`. The token lives in rclone_config, 0600, outside
+# every set and every repo. docs/atlas/85-backup.md; bin/keel-backup-setup makes both.
+[backup]
+store = "rclone:keel-drive:keel-backup"
+rclone_config = "~/.keel-backup/rclone.conf"
+
+[spaces.personal]
+config_dir = "~/harbor/spaces/personal/.claude"
+contract = "etc/space-personal.md"
+deny = ["mcp__claude_ai_Slack", "mcp__claude-in-chrome"]
+# Where a card may open a repo this file does not list: every git repo directly under it is
+# addressable by its directory name, and a card carrying `options.new_project` scaffolds one
+# that is not there yet. The work space has none: work repos are the adapter's to name.
+projects_dir = "~/projects"
+# The model a card in this space gets when nobody names one (keel/cardspec.py). Never left
+# to the account's own default: that is how a card ran on Fable for five days (c-434).
+model = "opus"
+# The fields a card here may never be filed with silently: the create readback names each
+# one that was not stated, and where its value came from.
+confirm = ["repo", "model"]
+# A repo card's house runs the pre-gate pipeline before the outcome gate: review (Keel's
+# reviewer and verifier), verify, preship, risk (keel/review/, decisions N4, E-9, HP-2). The
+# Stop hook holds the review to the stamp the agents' SubagentStop hook writes, and
+# `kb stage review` holds the rest. ON since 2026-09-24, knowing the stamp is the harness's
+# but a house's Bash can still write that file, so the gate is a step a house is held to,
+# not proof (E-9). `pipeline` is this space's own words for verify and preship.
+house_review = true
+pipeline = "etc/pipeline-personal.md"
+
+[spaces.personal.repos]
+harbor = "~/harbor"
+keel = "~/keel"
+
+# Bosun's session (docs/atlas/96-bosun.md): the one machine it runs on, and what its strip
+# measures. `keel console start|stop|restart|status` there; the deck's taps reach it through
+# that machine's door. The window is the model's, which no log states.
+[console]
+# Bosun is its own Unix user on the box (Atlas: Bosun, "Bosun's own user"): bypass mode inside
+# its own home and clone, walled off from his token, the board's file and the live checkout
+# by Unix permissions. `bin/keel-bosun-user` sets the user up; `keel console attach` joins it.
+host = "box"
+permission_mode = "bypassPermissions"
+config_dir = "/home/bosun/.claude"
+checkout = "/home/bosun/keel"
+board_url = "http://127.0.0.1:8790"
+context_window = 1000000
+compact_at = 70
+# A failure the drain or doctor sees this many times inside this many minutes becomes a
+# request to Bosun (`keel/requests.py`, c-520).
+repeat_after = 3
+repeat_minutes = 60
+
+[spaces.work]
+host = "mac"                # work houses and the review/PR providers run on the laptop only
+config_dir = "~/.claude"
+contract = "etc/space-work.md"
+adapter = "work"
+deny = ["mcp__claude-in-chrome"]
+model = "opus"
+confirm = ["repo", "autonomy", "design_doc", "base", "tracker_mode"]
+# The same pre-gate pipeline as the personal space (HP-3, 2026-09-24): the work skill that
+# used to carry its own review no longer does, so turning this on reviews a work house once.
+house_review = true
+pipeline = "adapters/work/pipeline.md"
+# c-597: speed first, nothing weaker. Preship comes FIRST (fetch, rebase, docs and swagger,
+# lint, the push and the draft pull request, so the code host's CI runs alongside), then the
+# reviewer, the full test run and the screenshots side by side on that one head, so no later
+# commit stales the review stamp. One full review pass per trip, then a fix check.
+preship_first = true
+review_full_rounds = 1
+# Lane RC: a review card still in the inbox whose pull request has had no activity (raised,
+# a push, a comment, his review requested) for this many days is backlog, off the inbox and
+# Attention until it moves again; `kb backlog` still overrides it.
+review_backlog_days = 15
+# Lane GRP (GR-3): a review card whose story has a branch but no pull request in the other
+# repo waits this long (Held) for that side to be raised, then is reviewed alone. The old
+# review scanner's FEATURE_HOLD_HOURS.
+review_sibling_hours = 48
+# Lane RETIRE (RT-2): the review fetcher's two settings, carried over from the old review
+# scanner's flag files. review_auto true files a new review card at assigned (it starts by
+# itself), false in the inbox for his Review tap; review_model is the model it carries. The
+# deck's gear writes a live override to state/review-settings.json on the machine that
+# holds the space, never this tracked file (keel/reviewsettings.py says why).
+review_auto = false
+review_model = "opus"
+
+[spaces.work.repos]
+api = "~/workspace/api"
+web = "~/workspace/web"
+
+[tests]
+# The command Approve outcome runs on the MERGED tree of a personal card (its branch merged
+# onto the target's head in a temporary worktree) before landing it by fast-forward
+# (keel/merging.py). A repo without an entry merges untested.
+keel = "make test"
+
+# What a HOUSE runs before it stages review (c-544): the full suite runs once per change, on
+# the merged tree above, so a house runs only what its change can reach (`make test-changed`,
+# which falls back to the full suite when it cannot tell) and the review stamp records which
+# ran. `{base}` is the card's base. A repo without an entry runs its `[tests]`.
+[house_tests]
+keel = "make test-changed BASE={base}"
+
+# The branch a repo's approved outcomes land on, when merging into what its checkout has out
+# would be a deploy (c-526, keel/deploy.py). Keel's box and Mac run main, so a Keel outcome,
+# his or Bosun's, lands on `next`; every Keel card builds from `next`; main moves only when
+# he answers the deploy ask the box's drain raises. A repo not named here merges as before.
+[integration]
+keel = "next"
+
+# What a red deploy suite reruns, once, on the same tree: only what failed. `{log}` is the
+# red run's output. A repo without an entry gets no rerun: red is red.
+[retests]
+keel = "make test-again LOG={log}"
+
+# Cards the fetch role files again on a schedule (keel/recurring.py). Due when no card
+# carrying `options.recurring = <key>` is open and the newest reached done `every_days`
+# ago, so the clock starts when he closes the last one. docs/atlas/86-restore.md.
+[recurring.restore-rehearsal]
+every_days = 91
+space = "personal"
+repo = "keel"
+autonomy = "autonomous"
+model = "sonnet"            # it files straight at assigned, so it names its model itself
+title = "Quarterly restore rehearsal"
+brief = """The quarterly proof that Keel comes back from its backups on a machine that has never seen it (docs/atlas/86-restore.md). From your worktree, run `bin/keel-rehearse --card $KEEL_CARD`: a fresh Ubuntu container on this Mac restores the newest snapshots through the store alone, and the report lands at state/cards/$KEEL_CARD/rehearsal.md. Passed: stage review with that report as the output. Failed: the restore path is broken, which is the one thing a backup must not be; find why from the report and the log beside it, fix it on this card if it is Keel's code, and run the rehearsal again. If the fix is not yours to make (a secret, a login, the store), block with the report."""
+
+# Keel's own model turns, each pinned so none falls to the account's default (keel/models.py).
+# `keel voice install` writes both into the gateway's environment.
+[models]
+converse = "opus"           # the voice conversation
+refine = "sonnet"           # the one turn per capture, a minute after it is filed
+
+[voice]
+# The voice gateway: `keel serve` proxies /voice/ (and splices /voice/ws) to this port, and
+# `keel voice install` writes all three values into the agent's environment, so the
+# gateway keeps reading its environment and never parses this file.
+port = 4390
+space_default = "personal"   # where a capture is filed unless the page says otherwise
+mode_default = "capture"     # /voice/health only: the page rests in talk and arms a capture per hold (VP-2)
+engine_default = "google"    # which synthesiser speaks: google or kokoro (V7)
+# Voice's own address, the Tailscale Service `svc:harbor` served by the box (2026-09-26), so a
+# phone installs Voice as its own app beside the deck; and the deck's address, where Voice's
+# back link returns. Unset, Voice stays under the deck at /segments/voice/app/.
+# svc:harbor is attached on the box (tagged tag:keel, 2026-09-26).
+app_url = "https://harbor.example.ts.net"
+deck_url = "https://keel.example.ts.net"
+# ONE PROCESS PER CONVERSATION, NOT PER SENTENCE (V12). While he is connected to a house,
+# every sentence goes into one kept-alive `claude` that this machine's `keel serve` owns
+# (`--input-format stream-json` on its stdin), and the answer is spoken sentence by sentence
+# as it is written. Measured on the Mac, 2026-09-20, Claude Code 2.1.278: 1.0 to 1.5 s to
+# the first word against 3.6 to 4.1 s for a process per sentence, and the first sentence of
+# a four sentence answer spoken at 2.2 s instead of about 5.2 s. `false` is the one line
+# back to the old shape, for a build of `claude` that will not take `--input-format
+# stream-json`; the one-shot turn (the phone Harbor's single question) is unaffected either
+# way, and a server that is not answering falls back to it on its own.
+kept_alive = true
+# HARBOR'S OWN TURNS THE SAME WAY (R2): one kept-alive `claude` for the voice conversation,
+# spoken as it streams, instead of a `claude -p --resume` per utterance. Default false, and
+# false is the old shape; on since 2026-09-24 (it needs `keel voice install --load`).
+harbor_kept_alive = true
+
+# END OF UTTERANCE (V1). `auto` runs Silero through sherpa-onnx when the wheel and the
+# model file are both present and degrades to no detector when either is missing; `off`
+# is the one line back to the page's twenty second backstop. The hangover shipped on day
+# one is 2.5 s, deliberately well above V1's 700 ms target, and the recorded corpus is
+# what lowers it: `bin/keel-voice-vad-measure`.
+vad = "auto"
+# THE SILENCE THAT ENDS HIS SENTENCE, in seconds (2026-09-24, lane H). 2.0, approved on the
+# measured corpus: the two-stage rule cut him mid-sentence 11 of 32 times and a plain 2.0 s
+# 2 of 27, so the two-stage rule stays scored and unused. `keel voice install --load`
+# carries it to the gateway as HARBOR_VOICE_VAD_HANGOVER.
+vad_hangover = 2.0
+
+# THE CORPUS, AND IT IS MEANT TO BE TURNED OFF AGAIN. Recording every utterance to
+# state/voice/pcm/ is how the hangover above gets a measured number instead of a guess;
+# he agreed to two or three days of it at c-277's plan gate. The follow-up card sets this
+# back to false and runs `keel voice corpus --delete`. While it is true the recordings
+# are never backed up, capped at 500 MB, expired after 14 days, and shown on
+# /voice/health and `keel voice status`.
+record = true
+
+# THE JUDGES' SWITCH, SHIPPED DEFAULTS (V10, c-313). A judge is a named decision point with
+# two implementations behind one call: the rule (what decides today) and Jev. One key per
+# judge per answer where it matters, each `off`, `shadow` or `on`, and every one ships as
+# `shadow`: the call runs beside the turn, its answer is logged, and the turn goes the way it
+# would have gone without it. `on` means Jev decides when it arrives in time with confidence
+# over the judge's floor, and the rule decides otherwise.
+#
+# These are the DEFAULTS. The live value is `state/voice/judges.json`, written only by
+# `keel voice judge <key> on|shadow|off` and read by the gateway on its mtime, so a flip needs
+# no restart and no deploy; `keel voice judge <key> default` clears the override. The live
+# value is not here because this file is tracked and the box's checkout is the one the Mac
+# pushes to: a verb rewriting it would block that push. `keel/judges.py` has the whole of it,
+# and `docs/atlas/50-talker-and-voice.md` says why. A key nothing names here reads `off`.
+[voice.judges]
+"preturn.complete"  = "shadow"
+"preturn.addressed" = "shadow"
+"preturn.route"     = "shadow"
+"narrate"           = "shadow"
+# c-542's ranked seats (c-552): answers on the one `preturn` call, shadow only.
+"preturn.card"      = "shadow"
+"preturn.prefetch"  = "shadow"
+"preturn.repair"    = "shadow"
+"preturn.bargein"   = "shadow"
+
+# THE CONFIDENCE A JUDGE'S ANSWER MUST CLEAR TO DECIDE when it is `on`. Deliberately empty:
+# V10 sets no floor until B0's number from this machine is on the card AND a week of the
+# shadow report has been read. `keel voice judge <key> on` refuses while the key has no floor
+# here, and a key that is `on` with no floor reads `shadow` anyway.
+[voice.judge_floors]
+# "preturn.route" = 0.99

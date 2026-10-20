@@ -1,0 +1,103 @@
+{
+  "scene": "3. Reviewing a PR: keep two findings, drop one, approve, the comments post",
+  "seed": "morning",
+  "start": "/?view=attention",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scale": 2,
+  "hero": "keep 1",
+  "names": {
+    "row": "button.row:has-text('date range filter')",
+    "f1": "[data-fid='r1-f1']",
+    "f2": "[data-fid='r1-f2']",
+    "f3": "[data-fid='r1-f3']",
+    "f1_post": "[data-bid='r1-f1'] button.pb-choice[data-key='post']",
+    "f2_post": "[data-bid='r1-f2'] button.pb-choice[data-key='post']",
+    "f3_drop": "[data-bid='r1-f3'] button.pb-choice[data-key='drop']",
+    "verdict": "button.pd-opt[data-key='changes']",
+    "approve": "button:has-text('Approve outcome')"
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "target": "row",
+      "label": "needs you",
+      "pause": 1500
+    },
+    {
+      "do": "click",
+      "target": "row",
+      "label": "the card",
+      "pause": 2000
+    },
+    {
+      "do": "goto",
+      "url": "/outcome/{{review}}",
+      "label": "the review",
+      "pause": 0
+    },
+    {
+      "do": "wait",
+      "target": "f1",
+      "label": "loaded",
+      "pause": 2500
+    },
+    {
+      "do": "scroll",
+      "target": "f1",
+      "label": "finding 1",
+      "pause": 2500
+    },
+    {
+      "do": "click",
+      "target": "f1_post",
+      "label": "keep 1",
+      "pause": 1200
+    },
+    {
+      "do": "scroll",
+      "target": "f2",
+      "label": "finding 2",
+      "pause": 2000
+    },
+    {
+      "do": "click",
+      "target": "f2_post",
+      "label": "keep 2",
+      "pause": 1200
+    },
+    {
+      "do": "scroll",
+      "target": "f3",
+      "label": "finding 3",
+      "pause": 2000
+    },
+    {
+      "do": "click",
+      "target": "f3_drop",
+      "label": "drop 3",
+      "pause": 1200
+    },
+    {
+      "do": "scroll",
+      "target": "verdict",
+      "label": "verdict",
+      "pause": 2000
+    },
+    {
+      "do": "click",
+      "target": "approve",
+      "label": "approve",
+      "pause": 1000
+    },
+    {
+      "do": "wait",
+      "for": "!document.body.innerText.includes('outcome gate open')",
+      "timeout": 60000,
+      "label": "posted",
+      "pause": 3000
+    }
+  ]
+}

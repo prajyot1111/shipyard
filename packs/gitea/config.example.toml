@@ -1,0 +1,10 @@
+# A space on this pack, as the install's config.toml writes it. Turning the pack on from
+# the deck's Setup view adds this table under the name you give, with `config_dir` set to
+# the install's own; its repos are cloned one at a time after, each from its http or https
+# address on a Gitea.
+
+[spaces.work]
+pack = "gitea"
+config_dir = "~/.claude"
+# remote = "origin"            # the git remote the repos fetch from and push to
+# branch = "shipyard/{id}-{slug}"  # how a card's branch is named

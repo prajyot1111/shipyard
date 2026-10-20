@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""B0: what a Jev call costs from this machine.
+
+The one benchmark Keel owes itself. c-295 ran B0 from the Mac (`~/projects/jev-bench`,
+which exists on that machine alone) and left the box unmeasured; V10's judges cannot have
+a confidence floor, or an honest 600 ms budget, until the box's number is written down.
+This is that measurement, ported rather than copied: B0 is 200 synthetic calls, and
+cloning a seven-benchmark Mac repo onto the box to run one of them is the expensive way.
+
+It reproduces c-295's B0 line for line, so `box` and `mac` sit in one table:
+
+- the same synthetic voice-sized case every call (one Choice, one Noul, about 390 input
+  tokens), so the model is never the variable;
+- two modes. `fresh` opens a new TLS connection per call, which is what a hook or a
+  short-lived process pays. `keep-alive` reuses one connection, which is what the
+  long-lived gateway client of V10 pays. The gap between them is the whole reason V10
+  says "one long-lived connection from the gateway";
+- 100 calls a mode, about a second apart, `jev-1.13.0` pinned (c-300's guard);
+- wall time from request sent to body read, the first call of each mode reported on its
+  own and excluded from the percentiles, because it carries the connection.
+
+Deliberately self-contained: it imports neither `keel/` nor `harbor_voice/`. The plan gate
+can decide anything it likes about the production client without invalidating the number.
+
+    bin/keel-jev-bench b0 --label box
+
+The key is read from where the Google TTS key lives on this machine and from nowhere else
+(`docs/atlas/50-talker-and-voice.md`): the systemd credential source on Linux, the login
+keychain on the Mac. It is never an argument, never an environment variable, and never
+printed. `bin/keel-jev-bench key` says whether it is there, and never what it is.
+"""
+
+import argparse
+import http.client
+import json
+import os
+import ssl
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOST = "api.typesafe.ai"
+PATH = "/v1/systemone"
+MODEL = "jev-1.13.0"                  # pinned: c-300's guard, so a model change is visible
+CREDENTIAL = "jev-key"                # beside google-tts-key, same directory, same mode
+KEYCHAIN_SERVICE = "harbor-voice-jev"
+RETENTION_FILE = Path.home() / ".config" / "jev" / "retention"
+RETENTION_OK = ("zdr", "accept-default-retention")
+CALLS = 100
+SPACING = 1.0
+TIMEOUT = 30.0
+
+# The synthetic case. A voice-sized utterance with the two question kinds a judge uses: a
+# Choice (which of a fixed few) and a Noul (yes or no as a probability). Its content never
+# matters, only its size, so it is the same every call and nothing about the board leaks
+# into a latency run.
+CASE = {
+    "state": "Heard: Right, so what have I got waiting on me at the moment, anything urgent?",
+    "model": MODEL,
+    "questions": {
+        "route": {
+            "type": "choice",
+            "instructions": ("The speaker said this to their personal assistant, which runs a "
+                             "board of work cards. Where should the utterance go?"),
+            "criteria": {
+                "board_read": "Asks for a fact that can be read off the board (what is waiting, what a card says, how many)",
+                "command": "Asks the assistant to change the board: file, assign, approve, move, note or stop a card",
+                "capture": "Dictates an idea or a task to be saved as a new card",
+                "talk": "Talk or a question that needs no board at all",
+                "other": None,
+            },
+        },
+        "complete": {
+            "type": "noul",
+            "instructions": "Is the speaker's thought finished, or did they stop mid-sentence?",
+            "criteria": {
+                "true": "The thought is finished and can be answered",
+                "false": "They paused mid-sentence and are still speaking",
+            },
+        },
+    },
+}
+
+
+# ----- the key, and the route the text goes out under -----
+
+def read_key() -> str:
+    """Exactly one place per machine, the same rule `GoogleTTS._key` follows."""
+    if sys.platform == "darwin":
+        done = subprocess.run(
+            ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, timeout=5)
+        return done.stdout.strip() if done.returncode == 0 else ""
+    source = credential_path()
+    try:
+        return source.read_text().strip()
+    except OSError:
+        return ""
+
+
+def credential_path() -> Path:
+    return Path.home() / ".config" / "keel" / "credentials" / CREDENTIAL
+
+
+# Both take the platform as an argument, for the reason `config.kokoro_note` does: the two
+# branches are one decision and a test on either machine has to be able to read both. Before
+# that, `test_a_missing_key_stops_the_run_and_says_where_the_key_goes` asserted the Linux
+# line and was red on every Mac run of `make test`.
+def where_the_key_lives(platform: str = "") -> str:
+    if (platform or sys.platform) == "darwin":
+        return f"the login keychain under service {KEYCHAIN_SERVICE!r}"
+    return str(credential_path())
+
+
+def how_to_put_it_there(platform: str = "") -> str:
+    if (platform or sys.platform) == "darwin":
+        return f'security add-generic-password -U -s {KEYCHAIN_SERVICE} -a "$USER" -w'
+    return "keel voice key set --name jev   (stdin, never an argument)"
+
+
+def retention() -> str:
+    """The route he declared, which the direct API has no request flag for (c-295)."""
+    try:
+        return RETENTION_FILE.read_text().strip()
+    except OSError:
+        return ""
+
+
+def refuse_without_retention() -> str | None:
+    value = retention()
+    if value in RETENTION_OK:
+        return None
+    if not value:
+        return (f"refused: {RETENTION_FILE} does not exist, so nothing says under what "
+                f"retention this text leaves the machine. Write one of {RETENTION_OK} "
+                f"into it, whichever is true.")
+    return (f"refused: {RETENTION_FILE} says {value!r}, which is not one of {RETENTION_OK}. "
+            f"The value has to say what is true.")
+
+
+# ----- one call -----
+
+def body() -> bytes:
+    return json.dumps(CASE).encode()
+
+
+def headers(key: str) -> dict:
+    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+            "Content-Length": str(len(body()))}
+
+
+def connect() -> http.client.HTTPSConnection:
+    return http.client.HTTPSConnection(HOST, timeout=TIMEOUT, context=ssl.create_default_context())
+
+
+def call(conn: http.client.HTTPSConnection, key: str) -> dict:
+    """One request, timed from send to the body being read. Never returns the answer's
+    content: this measures the clock, and the answers are the same case every time."""
+    started = time.perf_counter()
+    conn.request("POST", PATH, body=body(), headers=headers(key))
+    response = conn.getresponse()
+    raw = response.read()
+    seconds = time.perf_counter() - started
+    out = {"seconds": seconds, "status": response.status}
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        out["error"] = raw[:200].decode(errors="replace")
+        return out
+    if response.status != 200:
+        out["error"] = str(doc.get("error") or doc)[:200]
+        return out
+    # The id is a HEADER and not a body field (checked against the live API on
+    # 2026-09-20): `x-typesafe-request-id`. c-295's lines carry it, so this keeps the two
+    # runs' rows comparable down to being able to quote one call back to the vendor.
+    out["request_id"] = (response.getheader("x-typesafe-request-id")
+                         or doc.get("request_id") or "")
+    out["usage"] = doc.get("usage") or {}
+    return out
+
+
+def run_mode(mode: str, key: str, calls: int, spacing: float, log) -> list[dict]:
+    """`fresh` pays for a connection every call; `keep-alive` pays once."""
+    rows, conn = [], None
+    try:
+        for i in range(calls):
+            if mode == "fresh":
+                if conn is not None:
+                    conn.close()
+                conn = connect()
+            elif conn is None:
+                conn = connect()
+            try:
+                row = call(conn, key)
+            except Exception as exc:                                   # noqa: BLE001
+                row = {"seconds": None, "status": 0, "error": f"{exc.__class__.__name__}: {exc}"}
+                if conn is not None:
+                    conn.close()
+                conn = None
+            row = {"mode": mode, "i": i, "fresh_connection": mode == "fresh", **row}
+            rows.append(row)
+            log.write(json.dumps(row) + "\n")
+            log.flush()
+            say(f"  {mode} {i + 1}/{calls}  "
+                + (f"{row['seconds'] * 1000:.0f} ms" if row.get("seconds") else "failed")
+                + (f"  {row['error']}" if row.get("error") else ""))
+            if i + 1 < calls:
+                time.sleep(spacing)
+    finally:
+        if conn is not None:
+            conn.close()
+    return rows
+
+
+def say(line: str) -> None:
+    print(line, flush=True)
+
+
+# ----- the table -----
+
+def percentile(values: list[float], share: float) -> float:
+    """Nearest-rank, on a sorted list. n is 99 here, so no interpolation is worth arguing about."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, min(len(ordered), int(round(share * len(ordered) + 0.5))))
+    return ordered[rank - 1]
+
+
+def good_call(row: dict) -> bool:
+    """A line that timed a real answer.
+
+    `status` is absent from c-295's own B0 lines, which were written before this script
+    existed and are the `mac` row of the same table. A line with a duration and no error is
+    therefore a good call, and requiring `status == 200` would silently report that whole
+    run as 100 failures (which it did, the first time this merged the two)."""
+    if row.get("error"):
+        return False
+    status = row.get("status")
+    return bool(row.get("seconds")) and (status is None or status == 200)
+
+
+def summarise(rows: list[dict]) -> dict:
+    """One row of the table, per label and mode. The first call is reported on its own and
+    left out of the percentiles, because it is the connection and not the model."""
+    good = [r for r in rows if good_call(r)]
+    failed = len(rows) - len(good)
+    first = good[0]["seconds"] if good else None
+    rest = [r["seconds"] for r in good[1:]]
+    return {"n": len(rows), "failed": failed, "first": first,
+            "p50": percentile(rest, 0.50), "p95": percentile(rest, 0.95),
+            "p99": percentile(rest, 0.99), "max": max(rest) if rest else 0.0}
+
+
+def ms(seconds) -> str:
+    return f"{seconds * 1000:.0f} ms" if seconds else "-"
+
+
+def table(runs: dict[str, list[dict]]) -> str:
+    lines = ["| where | mode | n | first call | p50 | p95 | p99 | max |",
+             "|---|---|---|---|---|---|---|---|"]
+    for label in sorted(runs):
+        for mode in ("fresh", "keep-alive"):
+            rows = [r for r in runs[label] if r.get("mode") == mode]
+            if not rows:
+                continue
+            s = summarise(rows)
+            note = f" ({s['failed']} failed)" if s["failed"] else ""
+            lines.append(f"| {label} | {mode} | {s['n']}{note} | {ms(s['first'])} | "
+                         f"{ms(s['p50'])} | {ms(s['p95'])} | {ms(s['p99'])} | {ms(s['max'])} |")
+    return "\n".join(lines)
+
+
+def report(out: Path) -> Path:
+    """Rebuild results/B0.md from every label's jsonl, so a new machine joins the table."""
+    runs = {}
+    for path in sorted((out / "runs" / "B0").glob("*.jsonl")):
+        runs[path.stem] = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    written = time.strftime("%Y-%m-%dT%H:%M", time.localtime())
+    text = (
+        "# B0: latency\n\n"
+        "Synthetic request (the same small voice-sized case every time: 1 Choice, 1 Noul), "
+        "spaced about 1 s apart. `fresh` opens a new TLS connection per call, the cost a hook "
+        "would pay; `keep-alive` reuses one, the cost a long-running process would pay. Seconds "
+        "are wall time from request sent to body read.\n\n"
+        + table(runs) + "\n\n"
+        "Percentiles exclude each mode's first call, which is shown on its own. "
+        f"`mac` is c-295's run (2026-09-19); later rows are `bin/keel-jev-bench b0`. Written {written}.\n")
+    path = out / "results" / "B0.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+# ----- verbs -----
+
+def default_out() -> Path:
+    card = os.environ.get("KEEL_CARD")
+    home = Path(os.environ.get("KEEL_HOME") or (Path(__file__).resolve().parent.parent))
+    if card:
+        return home / "state" / "cards" / card
+    return home / "state" / "voice" / "bench"
+
+
+def b0(args) -> int:
+    refusal = refuse_without_retention()
+    if refusal:
+        say(refusal)
+        return 1
+    key = read_key()
+    if not key:
+        say(f"no Jev key on this machine. It is read from {where_the_key_lives()} and nowhere else.")
+        say(f"put it there with: {how_to_put_it_there()}")
+        return 1
+    out = Path(args.out).expanduser() if args.out else default_out()
+    log_path = out / "runs" / "B0" / f"{args.label}.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    say(f"B0, {args.calls} calls a mode, {MODEL}, label {args.label!r} -> {log_path}")
+    rows = []
+    with log_path.open("w") as log:
+        for mode in ("fresh", "keep-alive"):
+            rows += run_mode(mode, key, args.calls, args.spacing, log)
+    path = report(out)
+    say("")
+    say(table({args.label: rows}))
+    say("")
+    say(f"wrote {path}")
+    return 0 if any(r.get("status") == 200 for r in rows) else 1
+
+
+def key_check(_args) -> int:
+    """Whether the key is where this bench reads it, and never what it is."""
+    value = read_key()
+    say(f"{where_the_key_lives()}: {'set' if value else 'MISSING'}")
+    if not value:
+        say(f"put it there with: {how_to_put_it_there()}")
+    route = retention() or "unset"
+    say(f"{RETENTION_FILE}: {route}"
+        + ("" if route in RETENTION_OK else f"  (wanted one of {RETENTION_OK})"))
+    return 0 if value and route in RETENTION_OK else 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="keel-jev-bench", description=__doc__.splitlines()[0])
+    subs = parser.add_subparsers(dest="verb", required=True)
+    sub = subs.add_parser("b0", help="latency from this machine, fresh against keep-alive")
+    sub.add_argument("--label", required=True, help="the machine this row is for: box, mac")
+    sub.add_argument("--calls", type=int, default=CALLS)
+    sub.add_argument("--spacing", type=float, default=SPACING)
+    sub.add_argument("--out", help="where runs/ and results/ go (default: this card's directory)")
+    sub.set_defaults(fn=b0)
+    sub = subs.add_parser("key", help="is the key where this reads it, and is retention declared")
+    sub.set_defaults(fn=key_check)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

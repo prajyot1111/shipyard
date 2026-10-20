@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""keel-voice - the one command Harbor calls, plus the ones a person does.
+
+    keel-voice opening "checking the queue, should be quick" [--eta SECONDS]
+                                                              speak this once, right away
+    keel-voice say "spawned it, the plan gate is next"    speak this, out loud
+    keel-voice progress "still going through it"          narrate the wait, in shape only
+    keel-voice ask [--wait] [--json] "what is running"    one whole turn, no audio, waited for
+    keel-voice state                                      the bus, as JSON
+    keel-voice health                                     is the gateway up, and how
+
+## `say` IS THE ONLY WAY AN ANSWER COMES BACK, and that is a decision.
+
+Harbor answers a spoken turn by running this. The gateway watches for it and speaks it.
+Deliberately not by scraping Harbor's pane: the pane holds markdown, ledger tables and
+tool output, and speaking that aloud is exactly wrong. What Harbor wrote on the probe was
+genuinely good audio, "One dispatch is open, the voice front end planner, and it says it
+finished at ten past one and has been sitting idle since", and a scrape would have
+produced a tool-call block and a bulleted note.
+
+The consequence, which the per-turn framing says out loud: WHATEVER HARBOR WANTS HEARD
+GOES IN THIS COMMAND. On the probe it added a useful follow-up in its pane that voice
+silently dropped. That is correct behaviour, not a bug, and it is only correct because
+the framing says so.
+
+It writes a file and returns. It never blocks on the gateway, and it works with the
+gateway down: the line waits and is spoken when it comes back.
+
+`opening` and `progress` write to their own directories for exactly this reason: the
+gateway ends a turn the moment it reads a line out of `say`'s. Neither of them can ever
+be mistaken for the answer, however many times they are called.
+
+## `ask` is the turn without the microphone
+
+The whole path, the one instant answer and the fall to Harbor, from a terminal. It is how
+a turn is exercised without a phone, and it is what bin/keel-voice-selftest drives.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "voice"))     # the harbor_voice package lives under voice/
+
+from harbor_voice import config                                         # noqa: E402
+
+
+def cmd_say(text: str) -> int:
+    from harbor_voice.harbormsg import SayInbox                         # noqa: PLC0415
+    line = " ".join(str(text or "").split())
+    if not line:
+        print("keel-voice: nothing to say", file=sys.stderr)
+        return 2
+    path = SayInbox().write(line)
+    print(f"said: {line}")
+    print(f"  {path}")
+    return 0
+
+
+def cmd_opening(text: str, eta: float | None = None) -> int:
+    """The pre-work line: spoken once, immediately, and it can never end the turn.
+
+    A separate directory from `say`, and deliberately so. The watch loop that speaks
+    Harbor's turns ends the turn the moment it reads a line out of `say`'s inbox, so a
+    per-turn framing that asks for a line before the work and the real answer after it
+    cannot put both through the same command: the opener would be claimed as the whole
+    answer, and the real answer, written seconds later, would be silently dropped.
+    `opening` cannot do that: the watch loop speaks it once and keeps waiting.
+
+    `--eta`, c-229: the same number the opener names out loud ("I'll have it in a
+    moment"), given as real seconds so the gateway can hold the give-up mark to
+    Harbor's own estimate instead of the flat default. Optional and best effort: a
+    missing or unparsable value never blocks the line from being spoken.
+    """
+    from harbor_voice.harbormsg import OPENING_DIR, SayInbox            # noqa: PLC0415
+    line = " ".join(str(text or "").split())
+    if not line:
+        print("keel-voice: nothing to say", file=sys.stderr)
+        return 2
+    path = SayInbox(OPENING_DIR).write(line, eta=eta)
+    print(f"opening: {line}" + (f" (eta {eta:g}s)" if eta is not None else ""))
+    print(f"  {path}")
+    return 0
+
+
+def cmd_progress(text: str) -> int:
+    """Narration DURING the wait, never the answer: a separate inbox from `say`, so
+    calling this never finishes the turn early. Speaking it at all is the gateway's
+    call, not this command's: it only fires when the wait would otherwise go silent,
+    and only after the shape guard clears it (voice/harbor_voice/filler.py)."""
+    from harbor_voice.harbormsg import PROGRESS_DIR, SayInbox            # noqa: PLC0415
+    line = " ".join(str(text or "").split())
+    if not line:
+        print("keel-voice: nothing to report", file=sys.stderr)
+        return 2
+    path = SayInbox(PROGRESS_DIR).write(line)
+    print(f"progress: {line}")
+    print(f"  {path}")
+    return 0
+
+
+def _get(path: str, timeout: float = 5.0):
+    with urllib.request.urlopen(f"http://127.0.0.1:{config.PORT}{path}",
+                                timeout=timeout) as r:
+        return json.load(r)
+
+
+def cmd_state() -> int:
+    try:
+        print(json.dumps(_get("/voice/state"), indent=1))
+    except Exception as exc:                                            # noqa: BLE001
+        print(f"keel-voice: the gateway is not answering ({exc.__class__.__name__})",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_health() -> int:
+    try:
+        h = _get("/voice/health")
+    except Exception as exc:                                            # noqa: BLE001
+        print(f"keel-voice: the gateway is not answering on 127.0.0.1:{config.PORT} "
+              f"({exc.__class__.__name__})", file=sys.stderr)
+        print("  start it: keel voice install --load", file=sys.stderr)
+        return 1
+    print(json.dumps(h, indent=1))
+    return 0
+
+
+def cmd_ask(text: str, no_harbor: bool, as_json: bool = False, context: str = "") -> int:
+    """One turn, without the microphone and without the speaker.
+
+    TWO OUTCOMES, WHICH IS THE WHOLE CASCADE (decision D4). The exact-phrase table
+    answers "what's waiting on me" from the board, by code; everything else is a turn in
+    the voice conversation.
+
+    `--no-harbor` stops before that second one and says so. That is what makes this safe
+    to run repeatedly: without it, every ask spends a real model turn.
+
+    THE TURN RUNS IN THE FOREGROUND (c-422, 2026-09-23). This used to hand the text to
+    `harbormsg.send`, which starts the turn on a daemon thread and returns, and the command
+    then exited and killed it mid `claude -p`. `run_turn_now` holds the same conversation
+    lock the gateway's own turns hold, across processes, and returns with the answer.
+    `--wait` names that and is what the deck passes; the bare form waits too, because a
+    command that returns before its turn is over is the bug. `--json` prints one object.
+    """
+    from harbor_voice import verbs                                      # noqa: PLC0415
+    out = {"tier": "harbor", "ok": False, "busy": False, "answer": "", "drew": 0}
+    if verbs.is_waiting_question(text):
+        try:
+            out.update(tier="board", ok=True, answer=verbs.waiting_answer())
+            return emit_ask(out, as_json, 0)
+        except Exception as exc:                                        # noqa: BLE001
+            out["note"] = f"the board read raised {exc.__class__.__name__}"
+    if no_harbor:
+        out.update(ok=True, note="--no-harbor, so no turn was started in the voice conversation")
+        return emit_ask(out, as_json, 0)
+    from harbor_voice import harbormsg                                  # noqa: PLC0415
+    done = harbormsg.run_turn_now(text, context=context, source="deck")
+    out.update(ok=bool(done.get("ok")), busy=bool(done.get("busy")),
+               answer=str(done.get("answer") or ""), drew=int(done.get("drew") or 0),
+               written=str(done.get("written") or done.get("answer") or ""),
+               turn=done.get("turn"))
+    return emit_ask(out, as_json, 0 if out["ok"] else (4 if out["busy"] else 3))
+
+
+def emit_ask(out: dict, as_json: bool, code: int) -> int:
+    """Print what the ask came to: one JSON object, or the old readable lines."""
+    if as_json:
+        print(json.dumps(out))
+        return code
+    print(f"tier:    {'board' if out['tier'] == 'board' else 'Harbor'}")
+    if out.get("note"):
+        print(f"stopped: {out['note']}" if "--no-harbor" in out["note"] else f"note:    {out['note']}")
+    if out.get("busy"):
+        print(f"harbor:  NOT delivered: {out['answer']}")
+    elif out.get("answer"):
+        print(f"answer:  {out['answer']}")
+    return code
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="keel-voice")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("opening", help="speak this once, right away; never ends the turn")
+    p.add_argument("text", nargs="+")
+    p.add_argument("--eta", type=float, default=None,
+                   help="seconds until you expect to have the answer, for a slow turn")
+    p = sub.add_parser("say", help="speak this line out loud")
+    p.add_argument("text", nargs="+")
+    p = sub.add_parser("progress", help="narrate the wait, in shape only")
+    p.add_argument("text", nargs="+")
+    p = sub.add_parser("ask", help="one whole turn, without audio, waited for")
+    p.add_argument("text", nargs="+")
+    p.add_argument("--no-harbor", action="store_true",
+                   help="stop at the tier boundary; type nothing into Harbor's pane")
+    p.add_argument("--wait", action="store_true",
+                   help="run the turn in the foreground and return with its answer (the default)")
+    p.add_argument("--json", action="store_true", help="print one JSON object")
+    p.add_argument("--context", default="", help="one line of context, e.g. the board it came from")
+    sub.add_parser("state", help="the bus")
+    sub.add_parser("health", help="is the gateway up")
+    a = ap.parse_args()
+    if a.cmd == "opening":
+        return cmd_opening(" ".join(a.text), eta=a.eta)
+    if a.cmd == "say":
+        return cmd_say(" ".join(a.text))
+    if a.cmd == "progress":
+        return cmd_progress(" ".join(a.text))
+    if a.cmd == "ask":
+        return cmd_ask(" ".join(a.text), a.no_harbor, as_json=a.json, context=a.context)
+    if a.cmd == "state":
+        return cmd_state()
+    if a.cmd == "health":
+        return cmd_health()
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
